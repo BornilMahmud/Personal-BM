@@ -1,0 +1,6 @@
+{
+  "name": "Personal BM",
+  "description": "Complete personal finance management system — Every Taka. Every Transaction. Total Control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

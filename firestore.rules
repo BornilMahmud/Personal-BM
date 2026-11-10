@@ -1,0 +1,334 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function validTimestampsOnCreate(data) {
+      return data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+    function validTimestampsOnUpdate(data, oldData) {
+      return data.createdAt == oldData.createdAt &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // 1. UserSettings Validation
+    function isValidUserSettings(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() <= 120 &&
+             data.email is string && data.email.size() <= 254 &&
+             data.currencyCode is string && data.currencyCode.size() >= 1 && data.currencyCode.size() <= 10 &&
+             data.currencySymbol is string && data.currencySymbol.size() >= 1 && data.currencySymbol.size() <= 10 &&
+             data.timezone is string && data.timezone.size() >= 1 && data.timezone.size() <= 64 &&
+             data.language is string && (data.language == 'en' || data.language == 'bn') &&
+             data.themeMode is string && (data.themeMode == 'system' || data.themeMode == 'light' || data.themeMode == 'dark') &&
+             data.defaultAccountId is string && data.defaultAccountId.size() <= 128 &&
+             data.weekStartDay is string && (data.weekStartDay == 'SATURDAY' || data.weekStartDay == 'SUNDAY' || data.weekStartDay == 'MONDAY') &&
+             data.seededDefaults is bool;
+    }
+
+    // 2. Account Validation
+    function isValidAccount(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.type is string && (data.type == 'CASH' || data.type == 'BANK' || data.type == 'MOBILE_WALLET' || data.type == 'OTHER') &&
+             data.initialBalancePaisa is int &&
+             data.currentBalancePaisa is int &&
+             data.colorHex is string && data.colorHex.size() >= 4 && data.colorHex.size() <= 16 &&
+             data.iconName is string && data.iconName.size() >= 1 && data.iconName.size() <= 64 &&
+             data.isDefault is bool;
+    }
+
+    // 3. Category Validation
+    function isValidCategory(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.nameBn is string && data.nameBn.size() <= 120 &&
+             data.type is string && (data.type == 'INCOME' || data.type == 'EXPENSE') &&
+             data.iconName is string && data.iconName.size() >= 1 && data.iconName.size() <= 64 &&
+             data.colorHex is string && data.colorHex.size() >= 4 && data.colorHex.size() <= 16 &&
+             data.isCustom is bool;
+    }
+
+    // 4. FinTransaction Validation
+    function isValidFinTransaction(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+             data.amountPaisa is int && data.amountPaisa > 0 &&
+             data.type is string && (data.type == 'INCOME' || data.type == 'EXPENSE' || data.type == 'TRANSFER') &&
+             data.categoryId is string && data.categoryId.size() <= 128 &&
+             data.categoryName is string && data.categoryName.size() <= 120 &&
+             data.accountId is string && data.accountId.size() >= 1 && data.accountId.size() <= 128 &&
+             data.accountName is string && data.accountName.size() >= 1 && data.accountName.size() <= 120 &&
+             data.toAccountId is string && data.toAccountId.size() <= 128 &&
+             data.toAccountName is string && data.toAccountName.size() <= 120 &&
+             data.dateEpochDay is int &&
+             data.timeFormatted is string && data.timeFormatted.size() <= 16 &&
+             data.timestampMillis is int &&
+             data.paymentMethod is string && data.paymentMethod.size() <= 64 &&
+             data.notes is string && data.notes.size() <= 1000 &&
+             data.attachmentUri is string && data.attachmentUri.size() <= 1000 &&
+             data.recurringRuleId is string && data.recurringRuleId.size() <= 128;
+    }
+
+    // 5. Budget Validation
+    function isValidBudget(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.monthKey is string && data.monthKey.size() == 7 &&
+             data.categoryId is string && data.categoryId.size() >= 1 && data.categoryId.size() <= 128 &&
+             data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 120 &&
+             data.limitPaisa is int && data.limitPaisa > 0;
+    }
+
+    // 6. SavingsGoal Validation
+    function isValidSavingsGoal(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.targetAmountPaisa is int && data.targetAmountPaisa > 0 &&
+             data.currentSavedPaisa is int && data.currentSavedPaisa >= 0 &&
+             data.targetDateEpochDay is int &&
+             data.description is string && data.description.size() <= 500 &&
+             data.colorHex is string && data.colorHex.size() >= 4 && data.colorHex.size() <= 16 &&
+             data.iconName is string && data.iconName.size() >= 1 && data.iconName.size() <= 64;
+    }
+
+    // 7. SavingsContribution Validation
+    function isValidSavingsContribution(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.goalId is string && data.goalId.size() >= 1 && data.goalId.size() <= 128 &&
+             data.goalName is string && data.goalName.size() >= 1 && data.goalName.size() <= 120 &&
+             data.amountPaisa is int && data.amountPaisa > 0 &&
+             data.sourceAccountId is string && data.sourceAccountId.size() <= 128 &&
+             data.sourceAccountName is string && data.sourceAccountName.size() <= 120 &&
+             data.dateEpochDay is int &&
+             data.notes is string && data.notes.size() <= 500;
+    }
+
+    // 8. RecurringTransaction Validation
+    function isValidRecurringTransaction(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+             data.amountPaisa is int && data.amountPaisa > 0 &&
+             data.type is string && (data.type == 'INCOME' || data.type == 'EXPENSE') &&
+             data.categoryId is string && data.categoryId.size() >= 1 && data.categoryId.size() <= 128 &&
+             data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 120 &&
+             data.accountId is string && data.accountId.size() >= 1 && data.accountId.size() <= 128 &&
+             data.accountName is string && data.accountName.size() >= 1 && data.accountName.size() <= 120 &&
+             data.frequency is string && (data.frequency == 'DAILY' || data.frequency == 'WEEKLY' || data.frequency == 'MONTHLY' || data.frequency == 'YEARLY') &&
+             data.nextDueDateEpochDay is int &&
+             data.lastProcessedDateEpochDay is int &&
+             data.isActive is bool &&
+             data.reminderEnabled is bool &&
+             data.notes is string && data.notes.size() <= 500;
+    }
+
+    // 9. LoanRecord Validation
+    function isValidLoanRecord(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.personOrOrg is string && data.personOrOrg.size() >= 1 && data.personOrOrg.size() <= 120 &&
+             data.type is string && (data.type == 'BORROWED' || data.type == 'LENT') &&
+             data.principalAmountPaisa is int && data.principalAmountPaisa > 0 &&
+             data.outstandingAmountPaisa is int && data.outstandingAmountPaisa >= 0 &&
+             data.startDateEpochDay is int &&
+             data.dueDateEpochDay is int &&
+             data.accountId is string && data.accountId.size() <= 128 &&
+             data.accountName is string && data.accountName.size() <= 120 &&
+             data.status is string && (data.status == 'ACTIVE' || data.status == 'PAID') &&
+             data.notes is string && data.notes.size() <= 500;
+    }
+
+    // 10. LoanPayment Validation
+    function isValidLoanPayment(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.loanId is string && data.loanId.size() >= 1 && data.loanId.size() <= 128 &&
+             data.personOrOrg is string && data.personOrOrg.size() >= 1 && data.personOrOrg.size() <= 120 &&
+             data.amountPaisa is int && data.amountPaisa > 0 &&
+             data.accountId is string && data.accountId.size() <= 128 &&
+             data.accountName is string && data.accountName.size() <= 120 &&
+             data.dateEpochDay is int &&
+             data.notes is string && data.notes.size() <= 500;
+    }
+
+    match /users/{userId} {
+      match /settings/{settingId} {
+        allow get: if isOwner(userId) && isValidId(settingId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(settingId) &&
+                         incoming().keys().hasAll(['userId', 'displayName', 'email', 'currencyCode', 'currencySymbol', 'timezone', 'language', 'themeMode', 'defaultAccountId', 'weekStartDay', 'seededDefaults', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'displayName', 'email', 'currencyCode', 'currencySymbol', 'timezone', 'language', 'themeMode', 'defaultAccountId', 'weekStartDay', 'seededDefaults', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidUserSettings(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(settingId) &&
+                         isValidUserSettings(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'currencyCode', 'currencySymbol', 'timezone', 'language', 'themeMode', 'defaultAccountId', 'weekStartDay', 'seededDefaults', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(settingId) && existing().userId == request.auth.uid;
+      }
+
+      match /accounts/{accountId} {
+        allow get: if isOwner(userId) && isValidId(accountId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(accountId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'type', 'initialBalancePaisa', 'currentBalancePaisa', 'colorHex', 'iconName', 'isDefault', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'type', 'initialBalancePaisa', 'currentBalancePaisa', 'colorHex', 'iconName', 'isDefault', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidAccount(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(accountId) &&
+                         isValidAccount(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'type', 'initialBalancePaisa', 'currentBalancePaisa', 'colorHex', 'iconName', 'isDefault', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(accountId) && existing().userId == request.auth.uid;
+      }
+
+      match /categories/{categoryId} {
+        allow get: if isOwner(userId) && isValidId(categoryId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(categoryId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'nameBn', 'type', 'iconName', 'colorHex', 'isCustom', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'nameBn', 'type', 'iconName', 'colorHex', 'isCustom', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidCategory(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(categoryId) &&
+                         isValidCategory(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'nameBn', 'type', 'iconName', 'colorHex', 'isCustom', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(categoryId) && existing().userId == request.auth.uid;
+      }
+
+      match /transactions/{transactionId} {
+        allow get: if isOwner(userId) && isValidId(transactionId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(transactionId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'amountPaisa', 'type', 'categoryId', 'categoryName', 'accountId', 'accountName', 'toAccountId', 'toAccountName', 'dateEpochDay', 'timeFormatted', 'timestampMillis', 'paymentMethod', 'notes', 'attachmentUri', 'recurringRuleId', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'amountPaisa', 'type', 'categoryId', 'categoryName', 'accountId', 'accountName', 'toAccountId', 'toAccountName', 'dateEpochDay', 'timeFormatted', 'timestampMillis', 'paymentMethod', 'notes', 'attachmentUri', 'recurringRuleId', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidFinTransaction(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(transactionId) &&
+                         isValidFinTransaction(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'amountPaisa', 'type', 'categoryId', 'categoryName', 'accountId', 'accountName', 'toAccountId', 'toAccountName', 'dateEpochDay', 'timeFormatted', 'timestampMillis', 'paymentMethod', 'notes', 'attachmentUri', 'recurringRuleId', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(transactionId) && existing().userId == request.auth.uid;
+      }
+
+      match /budgets/{budgetId} {
+        allow get: if isOwner(userId) && isValidId(budgetId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(budgetId) &&
+                         incoming().keys().hasAll(['userId', 'monthKey', 'categoryId', 'categoryName', 'limitPaisa', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'monthKey', 'categoryId', 'categoryName', 'limitPaisa', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidBudget(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(budgetId) &&
+                         isValidBudget(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['monthKey', 'categoryId', 'categoryName', 'limitPaisa', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(budgetId) && existing().userId == request.auth.uid;
+      }
+
+      match /savings_goals/{goalId} {
+        allow get: if isOwner(userId) && isValidId(goalId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(goalId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'targetAmountPaisa', 'currentSavedPaisa', 'targetDateEpochDay', 'description', 'colorHex', 'iconName', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'targetAmountPaisa', 'currentSavedPaisa', 'targetDateEpochDay', 'description', 'colorHex', 'iconName', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidSavingsGoal(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(goalId) &&
+                         isValidSavingsGoal(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'targetAmountPaisa', 'currentSavedPaisa', 'targetDateEpochDay', 'description', 'colorHex', 'iconName', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(goalId) && existing().userId == request.auth.uid;
+      }
+
+      match /savings_contributions/{contributionId} {
+        allow get: if isOwner(userId) && isValidId(contributionId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(contributionId) &&
+                         incoming().keys().hasAll(['userId', 'goalId', 'goalName', 'amountPaisa', 'sourceAccountId', 'sourceAccountName', 'dateEpochDay', 'notes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'goalId', 'goalName', 'amountPaisa', 'sourceAccountId', 'sourceAccountName', 'dateEpochDay', 'notes', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidSavingsContribution(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(contributionId) &&
+                         isValidSavingsContribution(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['goalId', 'goalName', 'amountPaisa', 'sourceAccountId', 'sourceAccountName', 'dateEpochDay', 'notes', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(contributionId) && existing().userId == request.auth.uid;
+      }
+
+      match /recurring_transactions/{ruleId} {
+        allow get: if isOwner(userId) && isValidId(ruleId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(ruleId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'amountPaisa', 'type', 'categoryId', 'categoryName', 'accountId', 'accountName', 'frequency', 'nextDueDateEpochDay', 'lastProcessedDateEpochDay', 'isActive', 'reminderEnabled', 'notes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'amountPaisa', 'type', 'categoryId', 'categoryName', 'accountId', 'accountName', 'frequency', 'nextDueDateEpochDay', 'lastProcessedDateEpochDay', 'isActive', 'reminderEnabled', 'notes', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidRecurringTransaction(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(ruleId) &&
+                         isValidRecurringTransaction(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'amountPaisa', 'type', 'categoryId', 'categoryName', 'accountId', 'accountName', 'frequency', 'nextDueDateEpochDay', 'lastProcessedDateEpochDay', 'isActive', 'reminderEnabled', 'notes', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(ruleId) && existing().userId == request.auth.uid;
+      }
+
+      match /loans/{loanId} {
+        allow get: if isOwner(userId) && isValidId(loanId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(loanId) &&
+                         incoming().keys().hasAll(['userId', 'personOrOrg', 'type', 'principalAmountPaisa', 'outstandingAmountPaisa', 'startDateEpochDay', 'dueDateEpochDay', 'accountId', 'accountName', 'status', 'notes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'personOrOrg', 'type', 'principalAmountPaisa', 'outstandingAmountPaisa', 'startDateEpochDay', 'dueDateEpochDay', 'accountId', 'accountName', 'status', 'notes', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidLoanRecord(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(loanId) &&
+                         isValidLoanRecord(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         existing().status == 'ACTIVE' &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['personOrOrg', 'type', 'principalAmountPaisa', 'outstandingAmountPaisa', 'startDateEpochDay', 'dueDateEpochDay', 'accountId', 'accountName', 'status', 'notes', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(loanId) && existing().userId == request.auth.uid;
+      }
+
+      match /loan_payments/{paymentId} {
+        allow get: if isOwner(userId) && isValidId(paymentId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(paymentId) &&
+                         incoming().keys().hasAll(['userId', 'loanId', 'personOrOrg', 'amountPaisa', 'accountId', 'accountName', 'dateEpochDay', 'notes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'loanId', 'personOrOrg', 'amountPaisa', 'accountId', 'accountName', 'dateEpochDay', 'notes', 'createdAt', 'updatedAt']) &&
+                         validTimestampsOnCreate(incoming()) &&
+                         isValidLoanPayment(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(paymentId) &&
+                         isValidLoanPayment(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         validTimestampsOnUpdate(incoming(), existing()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['loanId', 'personOrOrg', 'amountPaisa', 'accountId', 'accountName', 'dateEpochDay', 'notes', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(paymentId) && existing().userId == request.auth.uid;
+      }
+    }
+  }
+}

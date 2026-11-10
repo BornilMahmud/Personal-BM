@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Personal BM</string>
+    <string name="app_tagline">Every Taka. Every Transaction. Total Control.</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="add_transaction">Add Transaction</string>
+    <string name="overview">Overview</string>
+    <string name="transactions">Transactions</string>
+    <string name="income">Income</string>
+    <string name="expenses">Expenses</string>
+    <string name="accounts_wallets">Accounts &amp; Wallets</string>
+    <string name="analytics">Analytics</string>
+    <string name="budgets">Budgets</string>
+    <string name="savings_goals">Savings Goals</string>
+    <string name="recurring_transactions">Recurring Transactions</string>
+    <string name="loans_debts">Loans &amp; Debts</string>
+    <string name="calendar">Calendar</string>
+    <string name="reports">Reports</string>
+    <string name="settings">Settings</string>
+</resources>

@@ -1,0 +1,279 @@
+{
+  "entities": {
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User preferences including currency, timezone, language, and theme.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email" },
+        "currencyCode": { "type": "string", "description": "Currency code (e.g. BDT)" },
+        "currencySymbol": { "type": "string", "description": "Currency symbol (e.g. ৳)" },
+        "timezone": { "type": "string", "description": "IANA timezone (Asia/Dhaka)" },
+        "language": { "type": "string", "enum": ["en", "bn"], "description": "UI language code" },
+        "themeMode": { "type": "string", "enum": ["system", "light", "dark"], "description": "Theme preference" },
+        "defaultAccountId": { "type": "string", "description": "Default account ID for transactions" },
+        "weekStartDay": { "type": "string", "enum": ["SATURDAY", "SUNDAY", "MONDAY"], "description": "First day of week" },
+        "seededDefaults": { "type": "boolean", "description": "Whether initial accounts/categories were seeded" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "displayName", "email", "currencyCode", "currencySymbol",
+        "timezone", "language", "themeMode", "defaultAccountId", "weekStartDay",
+        "seededDefaults", "createdAt", "updatedAt"
+      ]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Personal financial account or digital wallet (Cash, Bank, bKash, Nagad, Rocket, Upay).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string", "description": "Account display name" },
+        "type": { "type": "string", "enum": ["CASH", "BANK", "MOBILE_WALLET", "OTHER"], "description": "Account category type" },
+        "initialBalancePaisa": { "type": "integer", "description": "Opening balance in paisa (1 BDT = 100 paisa)" },
+        "currentBalancePaisa": { "type": "integer", "description": "Current balance in paisa" },
+        "colorHex": { "type": "string", "description": "Hex color string" },
+        "iconName": { "type": "string", "description": "Icon identifier" },
+        "isDefault": { "type": "boolean", "description": "Whether this is a default account" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "name", "type", "initialBalancePaisa", "currentBalancePaisa",
+        "colorHex", "iconName", "isDefault", "createdAt", "updatedAt"
+      ]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Income or expense category with bilingual names.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string", "description": "English category name" },
+        "nameBn": { "type": "string", "description": "Bengali category name" },
+        "type": { "type": "string", "enum": ["INCOME", "EXPENSE"], "description": "Category type" },
+        "iconName": { "type": "string", "description": "Icon identifier" },
+        "colorHex": { "type": "string", "description": "Color hex string" },
+        "isCustom": { "type": "boolean", "description": "Whether user-created" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "name", "nameBn", "type", "iconName", "colorHex",
+        "isCustom", "createdAt", "updatedAt"
+      ]
+    },
+    "FinTransaction": {
+      "title": "FinTransaction",
+      "description": "Financial transaction record (Income, Expense, or Transfer).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "title": { "type": "string", "description": "Transaction title" },
+        "amountPaisa": { "type": "integer", "description": "Positive amount in paisa" },
+        "type": { "type": "string", "enum": ["INCOME", "EXPENSE", "TRANSFER"], "description": "Transaction type" },
+        "categoryId": { "type": "string", "description": "Category ID" },
+        "categoryName": { "type": "string", "description": "Category name" },
+        "accountId": { "type": "string", "description": "Source/primary account ID" },
+        "accountName": { "type": "string", "description": "Source/primary account name" },
+        "toAccountId": { "type": "string", "description": "Destination account ID for transfers" },
+        "toAccountName": { "type": "string", "description": "Destination account name for transfers" },
+        "dateEpochDay": { "type": "integer", "description": "Epoch day in Asia/Dhaka" },
+        "timeFormatted": { "type": "string", "description": "HH:mm time string" },
+        "timestampMillis": { "type": "integer", "description": "Epoch millis" },
+        "paymentMethod": { "type": "string", "description": "Payment method label" },
+        "notes": { "type": "string", "description": "Optional notes" },
+        "attachmentUri": { "type": "string", "description": "Optional receipt attachment URI" },
+        "recurringRuleId": { "type": "string", "description": "Optional recurring rule ID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "title", "amountPaisa", "type", "categoryId", "categoryName",
+        "accountId", "accountName", "toAccountId", "toAccountName", "dateEpochDay",
+        "timeFormatted", "timestampMillis", "paymentMethod", "notes", "attachmentUri",
+        "recurringRuleId", "createdAt", "updatedAt"
+      ]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "Monthly spending limit for a category or overall month.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "monthKey": { "type": "string", "description": "YYYY-MM month identifier" },
+        "categoryId": { "type": "string", "description": "Category ID or ALL" },
+        "categoryName": { "type": "string", "description": "Category display name" },
+        "limitPaisa": { "type": "integer", "description": "Budget limit in paisa" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "monthKey", "categoryId", "categoryName", "limitPaisa",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "SavingsGoal": {
+      "title": "SavingsGoal",
+      "description": "Personal savings target and current progress.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string", "description": "Goal name" },
+        "targetAmountPaisa": { "type": "integer", "description": "Target amount in paisa" },
+        "currentSavedPaisa": { "type": "integer", "description": "Currently saved amount in paisa" },
+        "targetDateEpochDay": { "type": "integer", "description": "Target date epoch day" },
+        "description": { "type": "string", "description": "Goal description" },
+        "colorHex": { "type": "string", "description": "Hex color" },
+        "iconName": { "type": "string", "description": "Icon identifier" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "name", "targetAmountPaisa", "currentSavedPaisa", "targetDateEpochDay",
+        "description", "colorHex", "iconName", "createdAt", "updatedAt"
+      ]
+    },
+    "SavingsContribution": {
+      "title": "SavingsContribution",
+      "description": "Individual contribution toward a savings goal.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "goalId": { "type": "string", "description": "Target SavingsGoal ID" },
+        "goalName": { "type": "string", "description": "Target SavingsGoal name" },
+        "amountPaisa": { "type": "integer", "description": "Contribution amount in paisa" },
+        "sourceAccountId": { "type": "string", "description": "Optional source account ID" },
+        "sourceAccountName": { "type": "string", "description": "Optional source account name" },
+        "dateEpochDay": { "type": "integer", "description": "Date epoch day" },
+        "notes": { "type": "string", "description": "Contribution notes" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "goalId", "goalName", "amountPaisa", "sourceAccountId",
+        "sourceAccountName", "dateEpochDay", "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "RecurringTransaction": {
+      "title": "RecurringTransaction",
+      "description": "Scheduled recurring income or expense rule.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "title": { "type": "string", "description": "Recurring rule title" },
+        "amountPaisa": { "type": "integer", "description": "Amount in paisa" },
+        "type": { "type": "string", "enum": ["INCOME", "EXPENSE"], "description": "Transaction type" },
+        "categoryId": { "type": "string", "description": "Category ID" },
+        "categoryName": { "type": "string", "description": "Category name" },
+        "accountId": { "type": "string", "description": "Account ID" },
+        "accountName": { "type": "string", "description": "Account name" },
+        "frequency": { "type": "string", "enum": ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"], "description": "Recurrence frequency" },
+        "nextDueDateEpochDay": { "type": "integer", "description": "Next due date epoch day" },
+        "lastProcessedDateEpochDay": { "type": "integer", "description": "Last processed epoch day" },
+        "isActive": { "type": "boolean", "description": "Whether active or paused" },
+        "reminderEnabled": { "type": "boolean", "description": "Whether reminders are enabled" },
+        "notes": { "type": "string", "description": "Notes" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "title", "amountPaisa", "type", "categoryId", "categoryName",
+        "accountId", "accountName", "frequency", "nextDueDateEpochDay",
+        "lastProcessedDateEpochDay", "isActive", "reminderEnabled", "notes",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "LoanRecord": {
+      "title": "LoanRecord",
+      "description": "Loan borrowed or lent by the user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "personOrOrg": { "type": "string", "description": "Counterparty name" },
+        "type": { "type": "string", "enum": ["BORROWED", "LENT"], "description": "Loan direction" },
+        "principalAmountPaisa": { "type": "integer", "description": "Original loan amount in paisa" },
+        "outstandingAmountPaisa": { "type": "integer", "description": "Remaining balance in paisa" },
+        "startDateEpochDay": { "type": "integer", "description": "Loan date epoch day" },
+        "dueDateEpochDay": { "type": "integer", "description": "Due date epoch day" },
+        "accountId": { "type": "string", "description": "Associated account ID" },
+        "accountName": { "type": "string", "description": "Associated account name" },
+        "status": { "type": "string", "enum": ["ACTIVE", "PAID"], "description": "Repayment status" },
+        "notes": { "type": "string", "description": "Notes" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "personOrOrg", "type", "principalAmountPaisa", "outstandingAmountPaisa",
+        "startDateEpochDay", "dueDateEpochDay", "accountId", "accountName", "status",
+        "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "LoanPayment": {
+      "title": "LoanPayment",
+      "description": "Partial or full repayment record against a loan.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "loanId": { "type": "string", "description": "Associated LoanRecord ID" },
+        "personOrOrg": { "type": "string", "description": "Counterparty name" },
+        "amountPaisa": { "type": "integer", "description": "Payment amount in paisa" },
+        "accountId": { "type": "string", "description": "Account ID used for payment" },
+        "accountName": { "type": "string", "description": "Account name" },
+        "dateEpochDay": { "type": "integer", "description": "Payment date epoch day" },
+        "notes": { "type": "string", "description": "Payment notes" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "loanId", "personOrOrg", "amountPaisa", "accountId", "accountName",
+        "dateEpochDay", "notes", "createdAt", "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "Per-user settings and profile document"
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/Account" },
+      "description": "User bank accounts and mobile wallets"
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "User income and expense categories"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/FinTransaction" },
+      "description": "User financial transactions (income, expense, transfer)"
+    },
+    "/users/{userId}/budgets/{budgetId}": {
+      "schema": { "$ref": "#/entities/Budget" },
+      "description": "User monthly category and total budgets"
+    },
+    "/users/{userId}/savings_goals/{goalId}": {
+      "schema": { "$ref": "#/entities/SavingsGoal" },
+      "description": "User savings goals"
+    },
+    "/users/{userId}/savings_contributions/{contributionId}": {
+      "schema": { "$ref": "#/entities/SavingsContribution" },
+      "description": "Contributions made toward savings goals"
+    },
+    "/users/{userId}/recurring_transactions/{ruleId}": {
+      "schema": { "$ref": "#/entities/RecurringTransaction" },
+      "description": "Scheduled recurring transactions"
+    },
+    "/users/{userId}/loans/{loanId}": {
+      "schema": { "$ref": "#/entities/LoanRecord" },
+      "description": "Loans borrowed or lent"
+    },
+    "/users/{userId}/loan_payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/LoanPayment" },
+      "description": "Repayment history for loans"
+    }
+  }
+}
