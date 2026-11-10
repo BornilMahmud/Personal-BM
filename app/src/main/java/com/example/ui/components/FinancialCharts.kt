@@ -15,12 +15,14 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +47,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MoneyUtils
@@ -70,7 +73,7 @@ data class DonutSlice(
 )
 
 /**
- * Subtle decorative blue sparkline for the Minimal Light Total Balance Hero Card.
+ * Subtle decorative sparkline for the Balance Hero Card.
  */
 @Composable
 fun MiniBalanceSparkline(
@@ -79,7 +82,11 @@ fun MiniBalanceSparkline(
     modifier: Modifier = Modifier
 ) {
     val safeValues = remember(values) {
-        if (values.size >= 2) values else listOf(100L, 130L, 120L, 160L, 155L, 190L, 210L)
+        if (values.size >= 2 && values.any { it != values.first() }) {
+            values
+        } else {
+            listOf(100L, 128L, 118L, 152L, 146L, 182L, 210L)
+        }
     }
     val animProgress = remember { Animatable(0f) }
     LaunchedEffect(safeValues) {
@@ -98,7 +105,7 @@ fun MiniBalanceSparkline(
 
         val coords = safeValues.mapIndexed { idx, v ->
             val x = if (safeValues.size > 1) w * idx / (safeValues.size - 1).toFloat() else w / 2f
-            val normalized = ((v - minV).toFloat() / range).coerceIn(0.08f, 0.95f) * animProgress.value
+            val normalized = ((v - minV).toFloat() / range).coerceIn(0.12f, 0.92f) * animProgress.value
             val y = h - padVert - usableH * normalized
             Offset(x, y)
         }
@@ -123,7 +130,7 @@ fun MiniBalanceSparkline(
         drawPath(
             path = fillPath,
             brush = Brush.verticalGradient(
-                colors = listOf(lineColor.copy(alpha = 0.16f), Color.Transparent),
+                colors = listOf(lineColor.copy(alpha = 0.22f), Color.Transparent),
                 startY = 0f,
                 endY = h
             )
@@ -132,12 +139,12 @@ fun MiniBalanceSparkline(
         drawPath(
             path = linePath,
             color = lineColor,
-            style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
+            style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
         )
 
         val lastPt = coords.last()
         drawCircle(
-            color = lineColor.copy(alpha = 0.22f),
+            color = lineColor.copy(alpha = 0.24f),
             radius = 6.dp.toPx(),
             center = lastPt
         )
@@ -150,7 +157,8 @@ fun MiniBalanceSparkline(
 }
 
 /**
- * Interactive dual-series or single-series Bar Chart with tap-to-inspect tooltip.
+ * High-visibility Interactive Dual-Series Bar Chart with background track columns,
+ * Y-axis scale indicators, and tap-to-inspect header pill.
  */
 @Composable
 fun InteractiveBarChart(
@@ -161,15 +169,21 @@ fun InteractiveBarChart(
     modifier: Modifier = Modifier
 ) {
     if (points.isEmpty()) {
-        EmptyChartBox("No data for the selected period")
+        EmptyChartBox("No chart data yet")
         return
     }
 
-    var selectedIndex by remember(points) { mutableIntStateOf((points.size - 1).coerceAtLeast(0)) }
+    // Default to the most recent point with data, or the last point
+    val initialSelectedIdx = remember(points) {
+        val lastNonZero = points.indexOfLast { it.incomePaisa > 0L || it.expensePaisa > 0L }
+        if (lastNonZero >= 0) lastNonZero else (points.size - 1).coerceAtLeast(0)
+    }
+    var selectedIndex by remember(points) { mutableIntStateOf(initialSelectedIdx) }
+
     val animProgress = remember { Animatable(0f) }
     LaunchedEffect(points) {
         animProgress.snapTo(0f)
-        animProgress.animateTo(1f, animationSpec = tween(500, easing = FastOutSlowInEasing))
+        animProgress.animateTo(1f, animationSpec = tween(520, easing = FastOutSlowInEasing))
     }
 
     val maxVal = remember(points, showIncomeSeries, showExpenseSeries) {
@@ -178,12 +192,14 @@ fun InteractiveBarChart(
                 if (showIncomeSeries) pt.incomePaisa else 0L,
                 if (showExpenseSeries) pt.expensePaisa else 0L
             )
-        } ?: 1L
-        max(m, 100L)
+        } ?: 0L
+        max(m, 100_00L) // minimum ৳100 scale when empty
     }
 
     val selectedPoint = points.getOrNull(selectedIndex.coerceIn(0, points.lastIndex))
-    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+    val activeSlotHighlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (selectedPoint != null) {
@@ -197,15 +213,246 @@ fun InteractiveBarChart(
             )
         }
 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(190.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Compact Y-Axis Labels
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(end = 6.dp, top = 4.dp, bottom = 6.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = formatCompactAxisMoney(maxVal, currencySymbol),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = formatCompactAxisMoney(maxVal / 2L, currencySymbol),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${currencySymbol}0",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Canvas(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(points) {
+                        detectTapGestures { offset ->
+                            val slotWidth = size.width.toFloat() / points.size.toFloat()
+                            val idx = (offset.x / slotWidth).toInt().coerceIn(0, points.lastIndex)
+                            selectedIndex = idx
+                        }
+                    }
+            ) {
+                val w = size.width
+                val h = size.height
+                val chartBottom = h - 8.dp.toPx()
+                val chartTop = 8.dp.toPx()
+                val usableHeight = (chartBottom - chartTop).coerceAtLeast(1f)
+
+                // Horizontal reference grid lines
+                for (i in 0..2) {
+                    val y = chartTop + usableHeight * (i / 2f)
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(0f, y),
+                        end = Offset(w, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
+
+                val slotW = w / points.size.toFloat()
+                val bothSeries = showIncomeSeries && showExpenseSeries
+                val barW = if (bothSeries) {
+                    (slotW * 0.34f).coerceIn(4.dp.toPx(), 16.dp.toPx())
+                } else {
+                    (slotW * 0.52f).coerceIn(6.dp.toPx(), 24.dp.toPx())
+                }
+
+                points.forEachIndexed { idx, pt ->
+                    val centerX = slotW * idx + slotW / 2f
+                    val isSelected = idx == selectedIndex
+
+                    if (isSelected) {
+                        drawRoundRect(
+                            color = activeSlotHighlight,
+                            topLeft = Offset(slotW * idx + 2f, chartTop),
+                            size = Size((slotW - 4f).coerceAtLeast(2f), usableHeight),
+                            cornerRadius = CornerRadius(8.dp.toPx())
+                        )
+                    }
+
+                    if (bothSeries) {
+                        val incLeft = centerX - barW - 1.5.dp.toPx()
+                        val expLeft = centerX + 1.5.dp.toPx()
+
+                        // Background Track Columns so bars are always visibly framed
+                        drawRoundRect(
+                            color = trackColor,
+                            topLeft = Offset(incLeft, chartTop),
+                            size = Size(barW, usableHeight),
+                            cornerRadius = CornerRadius(4.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = trackColor,
+                            topLeft = Offset(expLeft, chartTop),
+                            size = Size(barW, usableHeight),
+                            cornerRadius = CornerRadius(4.dp.toPx())
+                        )
+
+                        val incRatio = (pt.incomePaisa.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f) * animProgress.value
+                        val expRatio = (pt.expensePaisa.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f) * animProgress.value
+
+                        val incH = if (pt.incomePaisa > 0L) {
+                            (usableHeight * incRatio).coerceAtLeast(10.dp.toPx())
+                        } else {
+                            4.dp.toPx()
+                        }
+                        val expH = if (pt.expensePaisa > 0L) {
+                            (usableHeight * expRatio).coerceAtLeast(10.dp.toPx())
+                        } else {
+                            4.dp.toPx()
+                        }
+
+                        drawRoundRect(
+                            color = if (pt.incomePaisa > 0L) EmeraldSuccess else EmeraldSuccess.copy(alpha = 0.28f),
+                            topLeft = Offset(incLeft, chartBottom - incH),
+                            size = Size(barW, incH),
+                            cornerRadius = CornerRadius(4.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = if (pt.expensePaisa > 0L) CrimsonDanger else CrimsonDanger.copy(alpha = 0.28f),
+                            topLeft = Offset(expLeft, chartBottom - expH),
+                            size = Size(barW, expH),
+                            cornerRadius = CornerRadius(4.dp.toPx())
+                        )
+                    } else {
+                        val barLeft = centerX - barW / 2f
+                        drawRoundRect(
+                            color = trackColor,
+                            topLeft = Offset(barLeft, chartTop),
+                            size = Size(barW, usableHeight),
+                            cornerRadius = CornerRadius(5.dp.toPx())
+                        )
+                        val value = if (showIncomeSeries) pt.incomePaisa else pt.expensePaisa
+                        val color = if (showIncomeSeries) EmeraldSuccess else CrimsonDanger
+                        val ratio = (value.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f) * animProgress.value
+                        val barH = if (value > 0L) {
+                            (usableHeight * ratio).coerceAtLeast(10.dp.toPx())
+                        } else {
+                            4.dp.toPx()
+                        }
+
+                        drawRoundRect(
+                            color = if (value > 0L) color else color.copy(alpha = 0.28f),
+                            topLeft = Offset(barLeft, chartBottom - barH),
+                            size = Size(barW, barH),
+                            cornerRadius = CornerRadius(5.dp.toPx())
+                        )
+                    }
+                }
+            }
+        }
+
+        ChartXAxisLabels(points = points, selectedIndex = selectedIndex)
+    }
+}
+
+/**
+ * Interactive Colorful Single-Series Bar Chart for Life Events & Categories.
+ */
+@Composable
+fun InteractiveSliceBarChart(
+    slices: List<DonutSlice>,
+    currencySymbol: String = "৳",
+    modifier: Modifier = Modifier
+) {
+    if (slices.isEmpty()) {
+        EmptyChartBox("No event data yet")
+        return
+    }
+
+    var selectedIdx by remember(slices) { mutableIntStateOf(0) }
+    val animProgress = remember { Animatable(0f) }
+    LaunchedEffect(slices) {
+        animProgress.snapTo(0f)
+        animProgress.animateTo(1f, animationSpec = tween(500, easing = FastOutSlowInEasing))
+    }
+
+    val displaySlices = remember(slices) { slices.take(8) }
+    val maxVal = remember(displaySlices) {
+        max(displaySlices.maxOfOrNull { it.amountPaisa } ?: 0L, 100_00L)
+    }
+    val selectedSlice = displaySlices.getOrNull(selectedIdx.coerceIn(0, displaySlices.lastIndex))
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (selectedSlice != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(selectedSlice.color)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = selectedSlice.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = MoneyUtils.formatPaisa(selectedSlice.amountPaisa, currencySymbol),
+                        style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFontFamily),
+                        fontWeight = FontWeight.Bold,
+                        color = selectedSlice.color
+                    )
+                }
+            }
+        }
+
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(188.dp)
-                .pointerInput(points) {
+                .height(170.dp)
+                .pointerInput(displaySlices) {
                     detectTapGestures { offset ->
-                        val slotWidth = size.width.toFloat() / points.size.toFloat()
-                        val idx = (offset.x / slotWidth).toInt().coerceIn(0, points.lastIndex)
-                        selectedIndex = idx
+                        val slotW = size.width.toFloat() / displaySlices.size.toFloat()
+                        val idx = (offset.x / slotW).toInt().coerceIn(0, displaySlices.lastIndex)
+                        selectedIdx = idx
                     }
                 }
         ) {
@@ -215,72 +462,63 @@ fun InteractiveBarChart(
             val chartTop = 8.dp.toPx()
             val usableHeight = (chartBottom - chartTop).coerceAtLeast(1f)
 
-            for (i in 0..3) {
-                val y = chartTop + usableHeight * (i / 3f)
-                drawLine(
-                    color = gridColor,
-                    start = Offset(0f, y),
-                    end = Offset(w, y),
-                    strokeWidth = 1.dp.toPx()
-                )
+            for (i in 0..2) {
+                val y = chartTop + usableHeight * (i / 2f)
+                drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1.dp.toPx())
             }
 
-            val slotW = w / points.size.toFloat()
-            val bothSeries = showIncomeSeries && showExpenseSeries
-            val barW = if (bothSeries) {
-                (slotW * 0.34f).coerceIn(3.dp.toPx(), 16.dp.toPx())
-            } else {
-                (slotW * 0.52f).coerceIn(4.dp.toPx(), 24.dp.toPx())
-            }
+            val slotW = w / displaySlices.size.toFloat()
+            val barW = (slotW * 0.52f).coerceIn(10.dp.toPx(), 36.dp.toPx())
 
-            points.forEachIndexed { idx, pt ->
+            displaySlices.forEachIndexed { idx, slice ->
                 val centerX = slotW * idx + slotW / 2f
-                val isSelected = idx == selectedIndex
+                val barLeft = centerX - barW / 2f
+                drawRoundRect(
+                    color = trackColor,
+                    topLeft = Offset(barLeft, chartTop),
+                    size = Size(barW, usableHeight),
+                    cornerRadius = CornerRadius(6.dp.toPx())
+                )
+                val ratio = (slice.amountPaisa.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f) * animProgress.value
+                val barH = (usableHeight * ratio).coerceAtLeast(12.dp.toPx())
 
-                if (isSelected) {
-                    drawRoundRect(
-                        color = RoyalBlue.copy(alpha = 0.06f),
-                        topLeft = Offset(slotW * idx + 2f, chartTop),
-                        size = Size(slotW - 4f, usableHeight),
-                        cornerRadius = CornerRadius(6.dp.toPx())
-                    )
-                }
-
-                if (bothSeries) {
-                    val incRatio = (pt.incomePaisa.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f) * animProgress.value
-                    val expRatio = (pt.expensePaisa.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f) * animProgress.value
-                    val incH = (usableHeight * incRatio).coerceAtLeast(2.dp.toPx())
-                    val expH = (usableHeight * expRatio).coerceAtLeast(2.dp.toPx())
-
-                    drawRoundRect(
-                        color = EmeraldSuccess,
-                        topLeft = Offset(centerX - barW - 1.5.dp.toPx(), chartBottom - incH),
-                        size = Size(barW, incH),
-                        cornerRadius = CornerRadius(4.dp.toPx())
-                    )
-                    drawRoundRect(
-                        color = CrimsonDanger,
-                        topLeft = Offset(centerX + 1.5.dp.toPx(), chartBottom - expH),
-                        size = Size(barW, expH),
-                        cornerRadius = CornerRadius(4.dp.toPx())
-                    )
-                } else {
-                    val value = if (showIncomeSeries) pt.incomePaisa else pt.expensePaisa
-                    val color = if (showIncomeSeries) EmeraldSuccess else CrimsonDanger
-                    val ratio = (value.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f) * animProgress.value
-                    val barH = (usableHeight * ratio).coerceAtLeast(2.dp.toPx())
-
-                    drawRoundRect(
-                        color = color,
-                        topLeft = Offset(centerX - barW / 2f, chartBottom - barH),
-                        size = Size(barW, barH),
-                        cornerRadius = CornerRadius(5.dp.toPx())
-                    )
-                }
+                drawRoundRect(
+                    color = slice.color,
+                    topLeft = Offset(barLeft, chartBottom - barH),
+                    size = Size(barW, barH),
+                    cornerRadius = CornerRadius(6.dp.toPx())
+                )
             }
         }
 
-        ChartXAxisLabels(points = points, selectedIndex = selectedIndex)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            displaySlices.forEachIndexed { idx, slice ->
+                Text(
+                    text = slice.label.substringBefore(":").take(8),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (idx == selectedIdx) slice.color else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (idx == selectedIdx) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+private fun formatCompactAxisMoney(paisa: Long, symbol: String): String {
+    val taka = paisa / 100L
+    return when {
+        taka >= 100_000L -> "${symbol}${taka / 100_000L}L"
+        taka >= 1_000L -> "${symbol}${taka / 1_000L}k"
+        else -> "${symbol}$taka"
     }
 }
 
@@ -314,11 +552,11 @@ fun InteractiveLineChart(
                 if (showExpenseSeries) pt.expensePaisa else 0L
             )
         } ?: 1L
-        max(m, 100L)
+        max(m, 100_00L)
     }
 
     val selectedPoint = points.getOrNull(selectedIndex.coerceIn(0, points.lastIndex))
-    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (selectedPoint != null) {
@@ -335,7 +573,7 @@ fun InteractiveLineChart(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(188.dp)
+                .height(180.dp)
                 .pointerInput(points) {
                     detectTapGestures { offset ->
                         val step = if (points.size > 1) size.width.toFloat() / (points.size - 1).toFloat() else size.width.toFloat()
@@ -350,8 +588,8 @@ fun InteractiveLineChart(
             val padBottom = 12.dp.toPx()
             val usableH = (h - padTop - padBottom).coerceAtLeast(1f)
 
-            for (i in 0..3) {
-                val y = padTop + usableH * (i / 3f)
+            for (i in 0..2) {
+                val y = padTop + usableH * (i / 2f)
                 drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1.dp.toPx())
             }
 
@@ -384,7 +622,7 @@ fun InteractiveLineChart(
                 drawPath(
                     path = fillPath,
                     brush = Brush.verticalGradient(
-                        colors = listOf(lineColor.copy(alpha = 0.18f), Color.Transparent),
+                        colors = listOf(lineColor.copy(alpha = 0.2f), Color.Transparent),
                         startY = padTop,
                         endY = h - padBottom
                     )
@@ -434,7 +672,7 @@ private fun ChartInspectionPill(
     showExpenseSeries: Boolean
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         modifier = Modifier
@@ -449,7 +687,10 @@ private fun ChartInspectionPill(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (showIncomeSeries) {
@@ -464,7 +705,8 @@ private fun ChartInspectionPill(
                         Text(
                             text = MoneyUtils.formatPaisa(incomePaisa, currencySymbol),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                            color = EmeraldSuccess
+                            color = EmeraldSuccess,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -480,7 +722,8 @@ private fun ChartInspectionPill(
                         Text(
                             text = MoneyUtils.formatPaisa(expensePaisa, currencySymbol),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                            color = CrimsonDanger
+                            color = CrimsonDanger,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -527,7 +770,7 @@ fun InteractiveDonutChart(
 ) {
     val totalPaisa = slices.sumOf { it.amountPaisa }
     if (slices.isEmpty() || totalPaisa <= 0L) {
-        EmptyChartBox("No category spending recorded yet")
+        EmptyChartBox("No spending recorded yet")
         return
     }
 
@@ -544,7 +787,7 @@ fun InteractiveDonutChart(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            modifier = Modifier.size(200.dp),
+            modifier = Modifier.size(190.dp),
             contentAlignment = Alignment.Center
         ) {
             Canvas(
@@ -574,8 +817,8 @@ fun InteractiveDonutChart(
                     }
             ) {
                 var startAngle = -90f
-                val strokeWidthPx = 24.dp.toPx()
-                val selectedStrokePx = 30.dp.toPx()
+                val strokeWidthPx = 22.dp.toPx()
+                val selectedStrokePx = 28.dp.toPx()
 
                 slices.forEachIndexed { index, slice ->
                     val sweep = (slice.amountPaisa.toFloat() / totalPaisa.toFloat()) * 360f * animProgress.value
@@ -598,53 +841,56 @@ fun InteractiveDonutChart(
                 val pct = (activeSlice.amountPaisa * 100.0 / totalPaisa).toInt()
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 24.dp)
+                    modifier = Modifier.widthIn(max = 108.dp)
                 ) {
                     Text(
                         text = activeSlice.label,
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
                     )
                     Text(
                         text = "$pct%",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontFamily = JetBrainsMonoFontFamily),
+                        style = MaterialTheme.typography.titleLarge.copy(fontFamily = JetBrainsMonoFontFamily),
                         fontWeight = FontWeight.Bold,
                         color = activeSlice.color
                     )
                     Text(
                         text = MoneyUtils.formatPaisa(activeSlice.amountPaisa, currencySymbol),
                         style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             slices.forEachIndexed { idx, slice ->
                 val pct = (slice.amountPaisa * 100.0 / totalPaisa).toInt()
                 val isSelected = idx == selectedIdx
                 Surface(
-                    color = if (isSelected) slice.color.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant,
+                    color = if (isSelected) slice.color.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(
                         1.dp,
-                        if (isSelected) slice.color.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline
+                        if (isSelected) slice.color.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outline
                     ),
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { selectedIdx = idx }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -656,8 +902,10 @@ fun InteractiveDonutChart(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "${slice.label} ($pct%)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -671,14 +919,14 @@ private fun EmptyChartBox(message: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(160.dp)
+            .height(148.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = message,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

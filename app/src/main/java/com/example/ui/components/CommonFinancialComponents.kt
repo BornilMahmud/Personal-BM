@@ -39,9 +39,11 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Apartment
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -50,6 +52,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Home
@@ -57,6 +60,7 @@ import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Restaurant
@@ -99,55 +103,61 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.data.model.Account
 import com.example.data.model.Category
+import com.example.data.model.DefaultSeedData
 import com.example.data.model.DhakaDateUtils
+import com.example.data.model.EventBreakdownUtils
 import com.example.data.model.FinTransaction
 import com.example.data.model.MoneyUtils
 import com.example.data.model.parseHexColor
 import com.example.ui.theme.CrimsonDanger
-import com.example.ui.theme.CrimsonSoft
-import com.example.ui.theme.EmeraldSoft
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.RoyalBlue
-import com.example.ui.theme.RoyalBlueSoft
 import com.example.ui.theme.VibrantCyan
 import kotlin.math.roundToLong
 
-fun iconForName(name: String): ImageVector = when (name) {
-    "payments" -> Icons.Default.Payments
-    "account_balance" -> Icons.Default.AccountBalance
-    "smartphone", "phone_android" -> Icons.Default.PhoneAndroid
-    "wallet" -> Icons.Default.AccountBalanceWallet
-    "work" -> Icons.Default.Work
-    "laptop" -> Icons.Default.Laptop
-    "store" -> Icons.Default.Store
-    "movie", "ConfirmationNumber" -> Icons.Default.Movie
-    "code" -> Icons.Default.Code
-    "trending_up" -> Icons.AutoMirrored.Filled.TrendingUp
-    "redeem" -> Icons.Default.CardGiftcard
-    "restaurant" -> Icons.Default.Restaurant
-    "directions_bus" -> Icons.Default.DirectionsBus
-    "shopping_bag" -> Icons.Default.ShoppingBag
-    "school" -> Icons.Default.School
-    "home" -> Icons.Default.Home
-    "apartment" -> Icons.Default.Apartment
-    "bolt" -> Icons.Default.Bolt
-    "wifi" -> Icons.Default.Wifi
-    "medical_services" -> Icons.Default.MedicalServices
-    "flight" -> Icons.Default.Flight
+fun iconForName(name: String): ImageVector = when (name.trim().lowercase()) {
+    "payments", "cash" -> Icons.Default.Payments
+    "account_balance", "bank" -> Icons.Default.AccountBalance
+    "smartphone", "phone_android", "mobile" -> Icons.Default.PhoneAndroid
+    "wallet", "account_balance_wallet" -> Icons.Default.AccountBalanceWallet
+    "work", "salary" -> Icons.Default.Work
+    "laptop", "freelance" -> Icons.Default.Laptop
+    "store", "business" -> Icons.Default.Store
+    "movie", "confirmationnumber", "entertainment" -> Icons.Default.Movie
+    "code", "development" -> Icons.Default.Code
+    "trending_up", "invest" -> Icons.AutoMirrored.Filled.TrendingUp
+    "redeem", "gift", "festival" -> Icons.Default.CardGiftcard
+    "restaurant", "food", "gathering" -> Icons.Default.Restaurant
+    "directions_bus", "transport" -> Icons.Default.DirectionsBus
+    "shopping_bag", "shopping" -> Icons.Default.ShoppingBag
+    "school", "education" -> Icons.Default.School
+    "home", "housing" -> Icons.Default.Home
+    "apartment", "rent" -> Icons.Default.Apartment
+    "bolt", "utilities" -> Icons.Default.Bolt
+    "wifi", "internet" -> Icons.Default.Wifi
+    "medical_services", "health", "medical" -> Icons.Default.MedicalServices
+    "flight", "travel", "tour" -> Icons.Default.Flight
+    "park", "picnic" -> Icons.Default.Park
+    "celebration", "wedding" -> Icons.Default.Celebration
+    "cake", "birthday" -> Icons.Default.Cake
+    "event", "other_event" -> Icons.Default.Event
     "subscriptions" -> Icons.Default.Subscriptions
-    "spa" -> Icons.Default.Spa
-    "family_restroom" -> Icons.Default.FamilyRestroom
-    "devices" -> Icons.Default.Devices
+    "spa", "personal" -> Icons.Default.Spa
+    "family_restroom", "family" -> Icons.Default.FamilyRestroom
+    "devices", "tech" -> Icons.Default.Devices
     "savings" -> Icons.Default.Savings
     "more_horiz" -> Icons.Default.MoreHoriz
     else -> Icons.Default.Category
@@ -168,7 +178,7 @@ fun AnimatedMoneyText(
 ) {
     val animatedFloat by animateFloatAsState(
         targetValue = amountPaisa.toFloat(),
-        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
         label = "money_counter"
     )
     val displayPaisa = animatedFloat.roundToLong()
@@ -184,9 +194,56 @@ fun AnimatedMoneyText(
 }
 
 /**
- * Confirmed Minimal Light Total Balance Hero Card:
- * Elevated white card (#FFFFFF) with subtle blue sparkline, 1dp #E2E8F0 border,
- * month-over-month comparison pill, and active account summary chips.
+ * Reusable User Avatar Badge supporting Google Auth profile photos, custom image URIs/URLs,
+ * and crisp initials fallback.
+ */
+@Composable
+fun UserAvatarBadge(
+    displayName: String,
+    photoUrl: String,
+    size: Dp = 36.dp,
+    modifier: Modifier = Modifier
+) {
+    val initials = remember(displayName) {
+        val parts = displayName.trim().split(" ").filter { it.isNotBlank() }
+        when {
+            parts.size >= 2 -> "${parts[0].first()}${parts[1].first()}".uppercase()
+            parts.size == 1 -> parts[0].take(2).uppercase()
+            else -> "BM"
+        }
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+        shape = CircleShape,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = initials,
+                style = if (size >= 48.dp) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+            if (photoUrl.isNotBlank()) {
+                AsyncImage(
+                    model = photoUrl,
+                    contentDescription = "Profile photo of $displayName",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(size)
+                        .clip(CircleShape)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Clean, Non-Overlapping Total Balance Hero Card.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -201,143 +258,159 @@ fun HeroTotalBalanceCard(
     onWalletsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val primaryAccent = MaterialTheme.colorScheme.primary
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("hero_total_balance_card"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(RoyalBlueSoft),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccountBalanceWallet,
-                                contentDescription = null,
-                                tint = RoyalBlue,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (language == "bn") "মোট ব্যালেন্স (নেট ওয়ার্থ)" else "Total Balance",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    AnimatedMoneyText(
-                        amountPaisa = totalBalancePaisa,
-                        currencySymbol = currencySymbol,
-                        style = MaterialTheme.typography.displayMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        showDecimals = true
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(primaryAccent.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        val isPositive = currentMonthNetPaisa >= 0L
-                        Surface(
-                            color = if (isPositive) EmeraldSoft else CrimsonSoft,
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            val sign = if (momChangePct > 0) "+" else ""
-                            Text(
-                                text = "${sign}$momChangePct% vs last month",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (isPositive) EmeraldSuccess else CrimsonDanger,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                        Text(
-                            text = "Net: ${MoneyUtils.formatPaisa(currentMonthNetPaisa, currencySymbol, showPlusSign = true)}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Icon(
+                            imageVector = Icons.Default.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = primaryAccent,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (language == "bn") "মোট ব্যালেন্স" else "Total Balance",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
-                // Subtle Decorative Blue Sparkline
                 MiniBalanceSparkline(
                     values = sparklineValues,
-                    lineColor = RoyalBlue,
+                    lineColor = primaryAccent,
                     modifier = Modifier
-                        .width(120.dp)
-                        .height(64.dp)
-                        .padding(start = 8.dp)
+                        .width(88.dp)
+                        .height(36.dp)
                 )
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            AnimatedMoneyText(
+                amountPaisa = totalBalancePaisa,
+                currencySymbol = currencySymbol,
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                showDecimals = true
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val isPositive = currentMonthNetPaisa >= 0L
+                Surface(
+                    color = if (isPositive) EmeraldSuccess.copy(alpha = 0.14f) else CrimsonDanger.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    val sign = if (momChangePct > 0) "+" else ""
+                    Text(
+                        text = "${sign}$momChangePct% MoM",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isPositive) EmeraldSuccess else CrimsonDanger,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Monthly Net: ${MoneyUtils.formatPaisa(currentMonthNetPaisa, currencySymbol, showPlusSign = true)}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
             if (accounts.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f))
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${accounts.size} Linked Wallets & Accounts",
+                        text = "Wallets (${accounts.size})",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "Manage Wallets →",
+                        text = "Manage →",
                         style = MaterialTheme.typography.labelMedium,
-                        color = RoyalBlue,
+                        fontWeight = FontWeight.SemiBold,
+                        color = primaryAccent,
                         modifier = Modifier.clickable { onWalletsClick() }
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     accounts.take(5).forEach { acc ->
-                        val accColor = parseHexColor(acc.colorHex, RoyalBlue)
+                        val accColor = parseHexColor(acc.colorHex, primaryAccent)
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(accColor)
+                                Icon(
+                                    imageVector = iconForName(acc.iconName),
+                                    contentDescription = acc.name,
+                                    tint = accColor,
+                                    modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = acc.name,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = MoneyUtils.formatPaisa(acc.currentBalancePaisa, currencySymbol),
                                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -350,8 +423,7 @@ fun HeroTotalBalanceCard(
 }
 
 /**
- * Mobile & Dashboard Quick Actions Strip:
- * Add Expense | Add Income | Transfer Money | View Reports
+ * Clean 4-Action Quick Strip with prominent icons and short 1-word labels.
  */
 @Composable
 fun QuickActionsStrip(
@@ -366,19 +438,19 @@ fun QuickActionsStrip(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         QuickActionButton(
-            label = "Add Expense",
+            label = "Expense",
             icon = Icons.AutoMirrored.Filled.TrendingDown,
             accentColor = CrimsonDanger,
-            softBg = CrimsonSoft,
+            softBg = CrimsonDanger.copy(alpha = 0.14f),
             onClick = onAddExpense,
             testTag = "quick_action_expense",
             modifier = Modifier.weight(1f)
         )
         QuickActionButton(
-            label = "Add Income",
+            label = "Income",
             icon = Icons.AutoMirrored.Filled.TrendingUp,
             accentColor = EmeraldSuccess,
-            softBg = EmeraldSoft,
+            softBg = EmeraldSuccess.copy(alpha = 0.14f),
             onClick = onAddIncome,
             testTag = "quick_action_income",
             modifier = Modifier.weight(1f)
@@ -387,7 +459,7 @@ fun QuickActionsStrip(
             label = "Transfer",
             icon = Icons.AutoMirrored.Filled.CompareArrows,
             accentColor = RoyalBlue,
-            softBg = RoyalBlueSoft,
+            softBg = RoyalBlue.copy(alpha = 0.14f),
             onClick = onTransferMoney,
             testTag = "quick_action_transfer",
             modifier = Modifier.weight(1f)
@@ -396,7 +468,7 @@ fun QuickActionsStrip(
             label = "Reports",
             icon = Icons.Default.Assessment,
             accentColor = VibrantCyan,
-            softBg = RoyalBlueSoft,
+            softBg = VibrantCyan.copy(alpha = 0.14f),
             onClick = onViewReports,
             testTag = "quick_action_reports",
             modifier = Modifier.weight(1f)
@@ -416,21 +488,21 @@ private fun QuickActionButton(
 ) {
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .testTag(testTag),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(36.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(softBg),
                 contentAlignment = Alignment.Center
@@ -454,6 +526,9 @@ private fun QuickActionButton(
     }
 }
 
+/**
+ * Non-overlapping KPI Summary Metric Card with guaranteed visible icon badge.
+ */
 @Composable
 fun SummaryMetricCard(
     title: String,
@@ -471,7 +546,7 @@ fun SummaryMetricCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -479,16 +554,19 @@ fun SummaryMetricCard(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 6.dp)
                 )
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(30.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(accentColor.copy(alpha = 0.12f)),
+                        .background(accentColor.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -499,22 +577,24 @@ fun SummaryMetricCard(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             AnimatedMoneyText(
                 amountPaisa = amountPaisa,
                 currencySymbol = currencySymbol,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 showDecimals = true
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = accentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (subtitle.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -545,7 +625,6 @@ fun AdaptiveTransactionsSection(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Table Header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -554,7 +633,7 @@ fun AdaptiveTransactionsSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "TRANSACTION",
+                            text = "ITEM",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(2.2f)
@@ -566,10 +645,10 @@ fun AdaptiveTransactionsSection(
                             modifier = Modifier.weight(1.3f)
                         )
                         Text(
-                            text = "ACCOUNT",
+                            text = "WALLET",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1.3f)
+                            modifier = Modifier.weight(1.2f)
                         )
                         Text(
                             text = "DATE",
@@ -581,9 +660,9 @@ fun AdaptiveTransactionsSection(
                             text = "AMOUNT",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1.3f)
+                            modifier = Modifier.weight(1.2f)
                         )
-                        Spacer(modifier = Modifier.width(96.dp))
+                        Spacer(modifier = Modifier.width(88.dp))
                     }
 
                     transactions.forEachIndexed { index, tx ->
@@ -630,10 +709,16 @@ private fun DesktopTransactionTableRow(
     onDuplicate: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val parsedEvent = remember(tx.id, tx.notes, tx.categoryId) {
+        EventBreakdownUtils.parseEventTransaction(tx)
+    }
+    val effectiveColorHex = parsedEvent?.eventType?.colorHex ?: categoryColorHex
+    val effectiveIconName = parsedEvent?.eventType?.iconName ?: categoryIconName
+
     val badgeColor = when (tx.type) {
         "INCOME" -> EmeraldSuccess
         "TRANSFER" -> RoyalBlue
-        else -> parseHexColor(categoryColorHex, CrimsonDanger)
+        else -> parseHexColor(effectiveColorHex, CrimsonDanger)
     }
     val amountColor = when (tx.type) {
         "INCOME" -> EmeraldSuccess
@@ -648,7 +733,7 @@ private fun DesktopTransactionTableRow(
     val iconVec = when (tx.type) {
         "INCOME" -> Icons.AutoMirrored.Filled.TrendingUp
         "TRANSFER" -> Icons.AutoMirrored.Filled.CompareArrows
-        else -> iconForName(categoryIconName)
+        else -> iconForName(effectiveIconName)
     }
 
     Row(
@@ -660,14 +745,16 @@ private fun DesktopTransactionTableRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            modifier = Modifier.weight(2.2f),
+            modifier = Modifier
+                .weight(2.2f)
+                .padding(end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(badgeColor.copy(alpha = 0.12f)),
+                    .background(badgeColor.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -686,7 +773,18 @@ private fun DesktopTransactionTableRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (tx.notes.isNotBlank()) {
+                if (parsedEvent != null && parsedEvent.items.isNotEmpty()) {
+                    Text(
+                        text = parsedEvent.items.joinToString(" • ") {
+                            "${it.reason}: ${MoneyUtils.formatPaisa(it.amountPaisa, currencySymbol)}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = badgeColor,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else if (tx.notes.isNotBlank()) {
                     Text(
                         text = tx.notes,
                         style = MaterialTheme.typography.bodySmall,
@@ -700,11 +798,11 @@ private fun DesktopTransactionTableRow(
 
         Box(modifier = Modifier.weight(1.3f)) {
             Surface(
-                color = badgeColor.copy(alpha = 0.1f),
+                color = badgeColor.copy(alpha = 0.12f),
                 shape = RoundedCornerShape(6.dp)
             ) {
                 Text(
-                    text = tx.categoryName.ifBlank { tx.type },
+                    text = parsedEvent?.eventType?.shortLabel ?: tx.categoryName.ifBlank { tx.type },
                     style = MaterialTheme.typography.labelSmall,
                     color = badgeColor,
                     maxLines = 1,
@@ -720,11 +818,11 @@ private fun DesktopTransactionTableRow(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1.3f)
+            modifier = Modifier.weight(1.2f)
         )
 
         Text(
-            text = "${DhakaDateUtils.formatEpochDayShort(tx.dateEpochDay)} ${tx.timeFormatted}",
+            text = DhakaDateUtils.formatEpochDayShort(tx.dateEpochDay),
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMonoFontFamily),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -737,22 +835,22 @@ private fun DesktopTransactionTableRow(
             fontWeight = FontWeight.Bold,
             color = amountColor,
             maxLines = 1,
-            modifier = Modifier.weight(1.3f)
+            modifier = Modifier.weight(1.2f)
         )
 
         Row(
-            modifier = Modifier.width(96.dp),
+            modifier = Modifier.width(88.dp),
             horizontalArrangement = Arrangement.End
         ) {
             IconButton(
                 onClick = onEdit,
                 modifier = Modifier
-                    .size(30.dp)
+                    .size(28.dp)
                     .testTag("edit_tx_${tx.id}")
             ) {
                 Icon(
                     imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit transaction",
+                    contentDescription = "Edit",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(15.dp)
                 )
@@ -760,12 +858,12 @@ private fun DesktopTransactionTableRow(
             IconButton(
                 onClick = onDuplicate,
                 modifier = Modifier
-                    .size(30.dp)
+                    .size(28.dp)
                     .testTag("duplicate_tx_${tx.id}")
             ) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Duplicate transaction",
+                    contentDescription = "Duplicate",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(15.dp)
                 )
@@ -773,12 +871,12 @@ private fun DesktopTransactionTableRow(
             IconButton(
                 onClick = onDelete,
                 modifier = Modifier
-                    .size(30.dp)
+                    .size(28.dp)
                     .testTag("delete_tx_${tx.id}")
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = "Delete transaction",
+                    contentDescription = "Delete",
                     tint = CrimsonDanger,
                     modifier = Modifier.size(15.dp)
                 )
@@ -787,6 +885,7 @@ private fun DesktopTransactionTableRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TransactionRowItem(
     tx: FinTransaction,
@@ -798,10 +897,16 @@ fun TransactionRowItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val parsedEvent = remember(tx.id, tx.notes, tx.categoryId) {
+        EventBreakdownUtils.parseEventTransaction(tx)
+    }
+    val effectiveColorHex = parsedEvent?.eventType?.colorHex ?: categoryColorHex
+    val effectiveIconName = parsedEvent?.eventType?.iconName ?: categoryIconName
+
     val badgeColor = when (tx.type) {
         "INCOME" -> EmeraldSuccess
         "TRANSFER" -> RoyalBlue
-        else -> parseHexColor(categoryColorHex, CrimsonDanger)
+        else -> parseHexColor(effectiveColorHex, CrimsonDanger)
     }
     val amountColor = when (tx.type) {
         "INCOME" -> EmeraldSuccess
@@ -816,7 +921,7 @@ fun TransactionRowItem(
     val iconVec = when (tx.type) {
         "INCOME" -> Icons.AutoMirrored.Filled.TrendingUp
         "TRANSFER" -> Icons.AutoMirrored.Filled.CompareArrows
-        else -> iconForName(categoryIconName)
+        else -> iconForName(effectiveIconName)
     }
 
     Card(
@@ -824,110 +929,142 @@ fun TransactionRowItem(
             .fillMaxWidth()
             .clickable { onEdit() }
             .testTag("tx_item_${tx.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(badgeColor.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = iconVec,
-                    contentDescription = tx.categoryName,
-                    tint = badgeColor,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = tx.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val accountSummary = if (tx.type == "TRANSFER") {
-                    "${tx.accountName} → ${tx.toAccountName}"
-                } else {
-                    "${tx.categoryName} • ${tx.accountName}"
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(badgeColor.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = iconVec,
+                        contentDescription = tx.categoryName,
+                        tint = badgeColor,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
+                    Text(
+                        text = tx.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val accountSummary = if (tx.type == "TRANSFER") {
+                        "${tx.accountName} → ${tx.toAccountName}"
+                    } else {
+                        "${parsedEvent?.eventType?.shortLabel ?: tx.categoryName} • ${tx.accountName}"
+                    }
+                    Text(
+                        text = "$accountSummary • ${DhakaDateUtils.formatEpochDayShort(tx.dateEpochDay)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$signPrefix${MoneyUtils.formatPaisa(tx.amountPaisa, currencySymbol, showDecimals = true)}",
+                        style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                        fontWeight = FontWeight.Bold,
+                        color = amountColor,
+                        maxLines = 1
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier
+                                .size(26.dp)
+                                .testTag("edit_tx_${tx.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onDuplicate,
+                            modifier = Modifier
+                                .size(26.dp)
+                                .testTag("duplicate_tx_${tx.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Duplicate",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier
+                                .size(26.dp)
+                                .testTag("delete_tx_${tx.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Delete",
+                                tint = CrimsonDanger,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (parsedEvent != null && parsedEvent.items.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    parsedEvent.items.forEach { item ->
+                        Surface(
+                            color = badgeColor.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.25f))
+                        ) {
+                            Text(
+                                text = "${item.reason}: ${MoneyUtils.formatPaisa(item.amountPaisa, currencySymbol)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+            } else if (tx.notes.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "$accountSummary • ${DhakaDateUtils.formatEpochDayShort(tx.dateEpochDay)} ${tx.timeFormatted}",
+                    text = tx.notes,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (tx.notes.isNotBlank()) {
-                    Text(
-                        text = tx.notes,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "$signPrefix${MoneyUtils.formatPaisa(tx.amountPaisa, currencySymbol, showDecimals = true)}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
-                    fontWeight = FontWeight.Bold,
-                    color = amountColor
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier
-                            .size(30.dp)
-                            .testTag("edit_tx_${tx.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit transaction",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onDuplicate,
-                        modifier = Modifier
-                            .size(30.dp)
-                            .testTag("duplicate_tx_${tx.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Duplicate transaction",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier
-                            .size(30.dp)
-                            .testTag("delete_tx_${tx.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "Delete transaction",
-                            tint = CrimsonDanger,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                }
             }
         }
     }
@@ -950,41 +1087,44 @@ fun EmptyStateCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(RoyalBlueSoft),
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.AccountBalanceWallet,
                     contentDescription = title,
-                    tint = RoyalBlue,
-                    modifier = Modifier.size(26.dp)
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (subtitle.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (actionLabel != null && onAction != null) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = onAction,
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.testTag("empty_state_action_button")
                 ) {
                     Text(actionLabel)
@@ -1034,6 +1174,7 @@ fun ConfirmDeleteDialog(
 fun AddEditTransactionModal(
     initialTransaction: FinTransaction? = null,
     defaultType: String = "EXPENSE",
+    defaultDateEpochDay: Long? = null,
     accounts: List<Account>,
     categories: List<Category>,
     defaultAccountId: String,
@@ -1055,36 +1196,43 @@ fun AddEditTransactionModal(
         )
     }
 
-    val filteredCategories = remember(categories, txType) {
-        categories.filter { it.type == txType }
+    val safeAccounts = remember(accounts) {
+        accounts.ifEmpty { DefaultSeedData.defaultAccounts("local_default_user").map { it.second } }
     }
-    var selectedCategoryId by remember(txType, categories) {
+    val safeCategories = remember(categories) {
+        categories.ifEmpty { DefaultSeedData.defaultCategories("local_default_user").map { it.second } }
+    }
+
+    val filteredCategories = remember(safeCategories, txType) {
+        safeCategories.filter { it.type == txType }
+    }
+    var selectedCategoryId by remember(txType, safeCategories) {
         mutableStateOf(
             initialTransaction?.categoryId?.takeIf { it.isNotBlank() }
                 ?: filteredCategories.firstOrNull()?.id
-                ?: "cat_exp_food"
+                ?: if (txType == "INCOME") "cat_inc_allowance" else "cat_exp_food"
         )
     }
 
-    var selectedAccountId by remember(accounts) {
+    var selectedAccountId by remember(safeAccounts) {
         mutableStateOf(
             initialTransaction?.accountId?.takeIf { it.isNotBlank() }
-                ?: accounts.firstOrNull { it.id == defaultAccountId }?.id
-                ?: accounts.firstOrNull()?.id
+                ?: safeAccounts.firstOrNull { it.id == defaultAccountId }?.id
+                ?: safeAccounts.firstOrNull()?.id
                 ?: "acc_cash"
         )
     }
 
-    var selectedToAccountId by remember(accounts, selectedAccountId) {
+    var selectedToAccountId by remember(safeAccounts, selectedAccountId) {
         mutableStateOf(
             initialTransaction?.toAccountId?.takeIf { it.isNotBlank() }
-                ?: accounts.firstOrNull { it.id != selectedAccountId }?.id
-                ?: ""
+                ?: safeAccounts.firstOrNull { it.id != selectedAccountId }?.id
+                ?: "acc_bank"
         )
     }
 
     var dateEpochDay by remember {
-        mutableLongStateOf(initialTransaction?.dateEpochDay ?: DhakaDateUtils.todayEpochDay())
+        mutableLongStateOf(initialTransaction?.dateEpochDay ?: defaultDateEpochDay ?: DhakaDateUtils.todayEpochDay())
     }
     var timeFormatted by remember {
         mutableStateOf(initialTransaction?.timeFormatted ?: DhakaDateUtils.currentTimeFormatted())
@@ -1131,7 +1279,7 @@ fun AddEditTransactionModal(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Transaction Type Selector (EXPENSE / INCOME / TRANSFER)
             Surface(
@@ -1177,9 +1325,8 @@ fun AddEditTransactionModal(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Amount & Title
             OutlinedTextField(
                 value = amountInput,
                 onValueChange = {
@@ -1187,7 +1334,7 @@ fun AddEditTransactionModal(
                     validationError = null
                 },
                 label = { Text("Amount ($currencySymbol)") },
-                placeholder = { Text("e.g. 1250.00") },
+                placeholder = { Text("0.00") },
                 shape = RoundedCornerShape(10.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
@@ -1204,13 +1351,21 @@ fun AddEditTransactionModal(
                     title = it
                     validationError = null
                 },
-                label = { Text("Transaction Title") },
+                label = {
+                    Text(
+                        when (txType) {
+                            "EXPENSE" -> "Where / Item"
+                            "INCOME" -> "Source"
+                            else -> "Note"
+                        }
+                    )
+                },
                 placeholder = {
                     Text(
                         when (txType) {
-                            "INCOME" -> "e.g. Monthly Salary / Freelance Project"
-                            "TRANSFER" -> "e.g. Bank to bKash Cash-In"
-                            else -> "e.g. Grocery Shopping at Shwapno"
+                            "INCOME" -> "Monthly Allowance / Salary"
+                            "TRANSFER" -> "Bank to bKash"
+                            else -> "Lunch / Transport / Shopping"
                         }
                     )
                 },
@@ -1221,11 +1376,14 @@ fun AddEditTransactionModal(
                     .testTag("tx_title_input")
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Account Selector
             Text(
-                text = if (txType == "TRANSFER") "From Account" else "Account / Wallet",
+                text = when (txType) {
+                    "TRANSFER" -> "From Wallet"
+                    "INCOME" -> "Deposit Wallet"
+                    else -> "Wallet"
+                },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1234,7 +1392,7 @@ fun AddEditTransactionModal(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                accounts.forEach { acc ->
+                safeAccounts.forEach { acc ->
                     val selected = acc.id == selectedAccountId
                     FilterChip(
                         selected = selected,
@@ -1242,7 +1400,7 @@ fun AddEditTransactionModal(
                             selectedAccountId = acc.id
                             paymentMethod = acc.name
                             if (txType == "TRANSFER" && selectedToAccountId == acc.id) {
-                                selectedToAccountId = accounts.firstOrNull { it.id != acc.id }?.id ?: ""
+                                selectedToAccountId = safeAccounts.firstOrNull { it.id != acc.id }?.id ?: ""
                             }
                         },
                         label = {
@@ -1256,9 +1414,9 @@ fun AddEditTransactionModal(
             }
 
             if (txType == "TRANSFER") {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "To Destination Account",
+                    text = "To Wallet",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1267,7 +1425,7 @@ fun AddEditTransactionModal(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    accounts.filter { it.id != selectedAccountId }.forEach { acc ->
+                    safeAccounts.filter { it.id != selectedAccountId }.forEach { acc ->
                         val selected = acc.id == selectedToAccountId
                         FilterChip(
                             selected = selected,
@@ -1282,7 +1440,7 @@ fun AddEditTransactionModal(
                     }
                 }
             } else {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "Category",
                     style = MaterialTheme.typography.labelLarge,
@@ -1299,6 +1457,14 @@ fun AddEditTransactionModal(
                             selected = selected,
                             onClick = { selectedCategoryId = cat.id },
                             label = { Text(cat.name) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = iconForName(cat.iconName),
+                                    contentDescription = null,
+                                    tint = parseHexColor(cat.colorHex, RoyalBlue),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = parseHexColor(cat.colorHex, RoyalBlue).copy(alpha = 0.16f)
                             )
@@ -1307,9 +1473,14 @@ fun AddEditTransactionModal(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Date & Time Row
+            Text(
+                text = "Date & Time",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1330,9 +1501,9 @@ fun AddEditTransactionModal(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.CalendarMonth, contentDescription = "Date", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.CalendarMonth, contentDescription = "Date", modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(DhakaDateUtils.formatEpochDay(dateEpochDay))
+                    Text(DhakaDateUtils.formatEpochDay(dateEpochDay), maxLines = 1)
                 }
 
                 OutlinedButton(
@@ -1347,15 +1518,15 @@ fun AddEditTransactionModal(
                             },
                             hour,
                             min,
-                            true
+                            false
                         ).show()
                     },
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(0.8f)
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.Schedule, contentDescription = "Time", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Schedule, contentDescription = "Time", modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(timeFormatted)
+                    Text(DhakaDateUtils.formatTime12Hour(timeFormatted), maxLines = 1)
                 }
             }
 
@@ -1364,7 +1535,7 @@ fun AddEditTransactionModal(
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                label = { Text("Description / Notes (Optional)") },
+                label = { Text("Notes (Optional)") },
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1386,13 +1557,13 @@ fun AddEditTransactionModal(
                     },
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Attach Receipt", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Receipt", modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (attachmentUri.isBlank()) "Attach Receipt" else "Change Receipt")
+                    Text(if (attachmentUri.isBlank()) "Receipt Photo" else "Change Receipt")
                 }
                 if (attachmentUri.isNotBlank()) {
                     TextButton(onClick = { attachmentUri = "" }) {
-                        Text("Remove Attachment", color = CrimsonDanger)
+                        Text("Remove", color = CrimsonDanger)
                     }
                 }
             }
@@ -1406,30 +1577,26 @@ fun AddEditTransactionModal(
                 )
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = {
                     val amountPaisa = MoneyUtils.parseTakaToPaisa(amountInput, allowZero = false)
                     if (amountPaisa == null) {
-                        validationError = "Please enter a valid positive amount."
+                        validationError = "Enter a valid amount."
                         return@Button
                     }
                     val trimmedTitle = title.trim().ifBlank {
                         when (txType) {
-                            "TRANSFER" -> "Account Transfer"
+                            "TRANSFER" -> "Transfer"
                             else -> filteredCategories.firstOrNull { it.id == selectedCategoryId }?.name ?: "Transaction"
                         }
                     }
-                    val fromAcc = accounts.firstOrNull { it.id == selectedAccountId }
-                    if (fromAcc == null) {
-                        validationError = "Please select an account."
-                        return@Button
-                    }
+                    val fromAcc = safeAccounts.firstOrNull { it.id == selectedAccountId } ?: safeAccounts.first()
                     if (txType == "TRANSFER") {
-                        val toAcc = accounts.firstOrNull { it.id == selectedToAccountId }
+                        val toAcc = safeAccounts.firstOrNull { it.id == selectedToAccountId }
                         if (toAcc == null || toAcc.id == fromAcc.id) {
-                            validationError = "Please select a different destination account for the transfer."
+                            validationError = "Select a different destination wallet."
                             return@Button
                         }
                         val tx = FinTransaction(
@@ -1485,14 +1652,14 @@ fun AddEditTransactionModal(
                         onDismiss()
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
                     .testTag("save_transaction_button")
             ) {
-                Text(if (isEdit) "Update Transaction" else "Save Transaction", style = MaterialTheme.typography.titleMedium)
+                Text(if (isEdit) "Update" else "Save", style = MaterialTheme.typography.titleMedium)
             }
         }
     }

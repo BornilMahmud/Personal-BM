@@ -148,22 +148,29 @@ fun BudgetsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Monthly Budgets",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Budgets",
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { onMonthChange(DhakaDateUtils.previousMonthKey(monthKey)) }) {
+                        IconButton(
+                            onClick = { onMonthChange(DhakaDateUtils.previousMonthKey(monthKey)) },
+                            modifier = Modifier.size(28.dp)
+                        ) {
                             Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Month")
                         }
                         Text(
                             text = DhakaDateUtils.formatMonthKeyDisplay(monthKey),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = RoyalBlue
+                            style = MaterialTheme.typography.labelLarge,
+                            color = RoyalBlue,
+                            modifier = Modifier.padding(horizontal = 4.dp)
                         )
-                        IconButton(onClick = { onMonthChange(DhakaDateUtils.nextMonthKey(monthKey)) }) {
+                        IconButton(
+                            onClick = { onMonthChange(DhakaDateUtils.nextMonthKey(monthKey)) },
+                            modifier = Modifier.size(28.dp)
+                        ) {
                             Icon(Icons.Default.ChevronRight, contentDescription = "Next Month")
                         }
                     }
@@ -249,14 +256,14 @@ fun BudgetsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = bgt.categoryName,
                                     style = MaterialTheme.typography.titleLarge,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Last month spent: ${MoneyUtils.formatPaisa(prevSpent, symbol)}",
+                                    text = "Last month: ${MoneyUtils.formatPaisa(prevSpent, symbol)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -267,7 +274,7 @@ fun BudgetsScreen(
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
                                     Text(
-                                        text = "$pct% used",
+                                        text = "$pct%",
                                         style = MaterialTheme.typography.labelLarge,
                                         color = statusColor,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -476,14 +483,14 @@ fun SavingsGoalsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Savings Goals",
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Saved ${MoneyUtils.formatPaisa(totalSaved, symbol)} of ${MoneyUtils.formatPaisa(totalTarget, symbol)}",
+                        text = "${MoneyUtils.formatPaisa(totalSaved, symbol)} / ${MoneyUtils.formatPaisa(totalTarget, symbol)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = EmeraldSuccess
                     )
@@ -807,19 +814,19 @@ fun RecurringTransactionsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Recurring Transactions",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Recurring Bills",
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Auto-posts due subscriptions, bills, rent & salary without duplicates",
+                        text = "${uiState.recurringTransactions.count { it.isActive }} active schedules",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onRunCheckNow) {
                         Icon(Icons.Default.Refresh, contentDescription = "Process due items now")
                     }
@@ -1094,14 +1101,14 @@ fun LoansAndDebtsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Loans & Debts",
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Track money borrowed, money lent & partial repayments",
+                        text = "${uiState.loans.count { it.status == "ACTIVE" }} active records",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

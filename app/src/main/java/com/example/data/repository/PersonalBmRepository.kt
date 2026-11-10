@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.net.Uri
 import com.example.R
 import com.example.data.model.Account
 import com.example.data.model.Budget
@@ -16,6 +17,7 @@ import com.example.data.model.SavingsGoal
 import com.example.data.model.UserSettings
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -23,23 +25,34 @@ import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 class PersonalBmRepository(
-    private val db: FirebaseFirestore
+    private val db: FirebaseFirestore,
+    private val localStore: LocalPersonalBmStore? = null
 ) {
-    // CRITICAL: Always initialize with R.string.firestore_database_id
+    // CRITICAL: Always initialize with R.string.firestore_database_id and LocalPersonalBmStore
     constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(
+        db = FirebaseFirestore.getInstance(
             context.applicationContext.getString(R.string.firestore_database_id)
-        )
+        ),
+        localStore = LocalPersonalBmStore(context.applicationContext)
     )
 
     private val auth = Firebase.auth
 
-    private fun requireUserId(): String {
+    private fun activeUserId(): String {
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid != null) return cloudUid
+        if (localStore != null) return LocalPersonalBmStore.DEFAULT_LOCAL_USER_ID
+        throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
+    }
+
+    private fun requireCloudUserId(): String {
         return auth.currentUser?.uid
             ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
     }
@@ -47,10 +60,13 @@ class PersonalBmRepository(
     private fun userDoc(uid: String) = db.collection("users").document(uid)
 
     // ========================================================================
-    // REAL-TIME OBSERVATION STREAMS (Scoped with whereEqualTo("userId", uid))
+    // REAL-TIME OBSERVATION STREAMS
     // ========================================================================
 
     fun observeSettings(uid: String): Flow<UserSettings?> {
+        if (localStore != null) {
+            return localStore.observeSettings(uid)
+        }
         val path = "users/$uid/settings"
         return userDoc(uid).collection("settings")
             .whereEqualTo("userId", uid)
@@ -64,7 +80,22 @@ class PersonalBmRepository(
             .catch { e -> logIfSignedIn(e, uid, OperationType.LIST, path); throw e }
     }
 
+    fun observePhotoUrl(uid: String): Flow<String> {
+        if (localStore != null) {
+            return localStore.observePhotoUrl(uid)
+        }
+        val googlePhoto = try {
+            auth.currentUser?.photoUrl?.toString() ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+        return flowOf(googlePhoto)
+    }
+
     fun observeAccounts(uid: String): Flow<List<Account>> {
+        if (localStore != null) {
+            return localStore.observeAccounts(uid)
+        }
         val path = "users/$uid/accounts"
         return userDoc(uid).collection("accounts")
             .whereEqualTo("userId", uid)
@@ -77,6 +108,9 @@ class PersonalBmRepository(
     }
 
     fun observeCategories(uid: String): Flow<List<Category>> {
+        if (localStore != null) {
+            return localStore.observeCategories(uid)
+        }
         val path = "users/$uid/categories"
         return userDoc(uid).collection("categories")
             .whereEqualTo("userId", uid)
@@ -89,6 +123,9 @@ class PersonalBmRepository(
     }
 
     fun observeTransactions(uid: String): Flow<List<FinTransaction>> {
+        if (localStore != null) {
+            return localStore.observeTransactions(uid)
+        }
         val path = "users/$uid/transactions"
         return userDoc(uid).collection("transactions")
             .whereEqualTo("userId", uid)
@@ -104,6 +141,9 @@ class PersonalBmRepository(
     }
 
     fun observeBudgets(uid: String): Flow<List<Budget>> {
+        if (localStore != null) {
+            return localStore.observeBudgets(uid)
+        }
         val path = "users/$uid/budgets"
         return userDoc(uid).collection("budgets")
             .whereEqualTo("userId", uid)
@@ -115,6 +155,9 @@ class PersonalBmRepository(
     }
 
     fun observeSavingsGoals(uid: String): Flow<List<SavingsGoal>> {
+        if (localStore != null) {
+            return localStore.observeSavingsGoals(uid)
+        }
         val path = "users/$uid/savings_goals"
         return userDoc(uid).collection("savings_goals")
             .whereEqualTo("userId", uid)
@@ -127,6 +170,9 @@ class PersonalBmRepository(
     }
 
     fun observeSavingsContributions(uid: String): Flow<List<SavingsContribution>> {
+        if (localStore != null) {
+            return localStore.observeSavingsContributions(uid)
+        }
         val path = "users/$uid/savings_contributions"
         return userDoc(uid).collection("savings_contributions")
             .whereEqualTo("userId", uid)
@@ -139,6 +185,9 @@ class PersonalBmRepository(
     }
 
     fun observeRecurringTransactions(uid: String): Flow<List<RecurringTransaction>> {
+        if (localStore != null) {
+            return localStore.observeRecurringTransactions(uid)
+        }
         val path = "users/$uid/recurring_transactions"
         return userDoc(uid).collection("recurring_transactions")
             .whereEqualTo("userId", uid)
@@ -151,6 +200,9 @@ class PersonalBmRepository(
     }
 
     fun observeLoans(uid: String): Flow<List<LoanRecord>> {
+        if (localStore != null) {
+            return localStore.observeLoans(uid)
+        }
         val path = "users/$uid/loans"
         return userDoc(uid).collection("loans")
             .whereEqualTo("userId", uid)
@@ -163,6 +215,9 @@ class PersonalBmRepository(
     }
 
     fun observeLoanPayments(uid: String): Flow<List<LoanPayment>> {
+        if (localStore != null) {
+            return localStore.observeLoanPayments(uid)
+        }
         val path = "users/$uid/loan_payments"
         return userDoc(uid).collection("loan_payments")
             .whereEqualTo("userId", uid)
@@ -189,9 +244,34 @@ class PersonalBmRepository(
     // INITIAL SEEDING (Pre-loaded BDT Accounts & Categories)
     // ========================================================================
 
-    suspend fun ensureDefaultsSeeded(displayName: String, email: String) {
-        val uid = requireUserId()
-        val settingsRef = userDoc(uid).collection("settings").document("preferences")
+    suspend fun ensureDefaultsSeeded(
+        displayName: String,
+        email: String,
+        photoUrl: String = ""
+    ) {
+        val uid = activeUserId()
+        val googleUser = try { auth.currentUser } catch (_: Exception) { null }
+        val effectiveName = googleUser?.displayName?.takeIf { it.isNotBlank() } ?: displayName
+        val effectiveEmail = googleUser?.email?.takeIf { it.isNotBlank() } ?: email
+        val effectivePhoto = googleUser?.photoUrl?.toString()?.takeIf { it.isNotBlank() } ?: photoUrl
+
+        localStore?.ensureSeeded(uid, effectiveName, effectiveEmail, effectivePhoto)
+
+        val cloudUid = googleUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+
+        // Migrate any local default user data into this Google user's store so nothing is lost on login
+        localStore?.migrateDefaultUserToCloudUser(
+            cloudUid = cloudUid!!,
+            googleDisplayName = effectiveName,
+            googleEmail = effectiveEmail,
+            googlePhotoUrl = effectivePhoto
+        )
+
+        val settingsRef = userDoc(cloudUid!!).collection("settings").document("preferences")
         try {
             val existingSettingsSnap = settingsRef.get().await()
             if (existingSettingsSnap.exists()) {
@@ -199,15 +279,20 @@ class PersonalBmRepository(
                     UserSettings::class.java,
                     DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
                 )
-                if (existing?.seededDefaults == true) return
+                if (existing?.seededDefaults == true) {
+                    if (localStore != null) {
+                        syncLocalAndCloudForGoogleUser(cloudUid)
+                    }
+                    return
+                }
             }
 
             val batch = db.batch()
             val settingsModel = UserSettings(
                 id = "preferences",
-                userId = uid,
-                displayName = displayName.take(120),
-                email = email.take(254),
+                userId = cloudUid,
+                displayName = effectiveName.ifBlank { "Personal BM User" }.take(120),
+                email = effectiveEmail.take(254),
                 currencyCode = "BDT",
                 currencySymbol = "৳",
                 timezone = "Asia/Dhaka",
@@ -221,33 +306,193 @@ class PersonalBmRepository(
             )
             batch.set(settingsRef, settingsModel)
 
-            for ((docId, acc) in DefaultSeedData.defaultAccounts(uid)) {
-                val accRef = userDoc(uid).collection("accounts").document(docId)
+            for ((docId, acc) in DefaultSeedData.defaultAccounts(cloudUid)) {
+                val accRef = userDoc(cloudUid).collection("accounts").document(docId)
                 batch.set(accRef, acc.copy(createdAt = null, updatedAt = null))
             }
 
-            for ((docId, cat) in DefaultSeedData.defaultCategories(uid)) {
-                val catRef = userDoc(uid).collection("categories").document(docId)
+            for ((docId, cat) in DefaultSeedData.defaultCategories(cloudUid)) {
+                val catRef = userDoc(cloudUid).collection("categories").document(docId)
                 batch.set(catRef, cat.copy(createdAt = null, updatedAt = null))
             }
 
             batch.commit().await()
+
+            if (localStore != null) {
+                syncLocalAndCloudForGoogleUser(cloudUid)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, settingsRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.WRITE, settingsRef.path)
+                throw e
+            }
+        }
+    }
+
+    /**
+     * Synchronizes all collections between LocalPersonalBmStore and Firebase Firestore
+     * when a user is signed in with Google Auth.
+     */
+    suspend fun syncLocalAndCloudForGoogleUser(cloudUid: String = auth.currentUser?.uid ?: "") {
+        if (cloudUid.isBlank() || cloudUid == LocalPersonalBmStore.DEFAULT_LOCAL_USER_ID || localStore == null) return
+        try {
+            // 1. Pull existing cloud documents
+            val cloudSettings = userDoc(cloudUid).collection("settings").whereEqualTo("userId", cloudUid).get().await()
+                .documents.firstOrNull()?.toObject(UserSettings::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudAccounts = userDoc(cloudUid).collection("accounts").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(Account::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudCategories = userDoc(cloudUid).collection("categories").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(Category::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudTxs = userDoc(cloudUid).collection("transactions").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(FinTransaction::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudBudgets = userDoc(cloudUid).collection("budgets").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(Budget::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudGoals = userDoc(cloudUid).collection("savings_goals").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(SavingsGoal::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudContribs = userDoc(cloudUid).collection("savings_contributions").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(SavingsContribution::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudRecurring = userDoc(cloudUid).collection("recurring_transactions").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(RecurringTransaction::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudLoans = userDoc(cloudUid).collection("loans").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(LoanRecord::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val cloudLoanPayments = userDoc(cloudUid).collection("loan_payments").whereEqualTo("userId", cloudUid).get().await()
+                .toObjects(LoanPayment::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+
+            // 2. Merge cloud into local store
+            localStore.mergeFromCloud(
+                uid = cloudUid,
+                cloudSettings = cloudSettings,
+                cloudAccounts = cloudAccounts,
+                cloudCategories = cloudCategories,
+                cloudTransactions = cloudTxs,
+                cloudBudgets = cloudBudgets,
+                cloudGoals = cloudGoals,
+                cloudContribs = cloudContribs,
+                cloudRecurring = cloudRecurring,
+                cloudLoans = cloudLoans,
+                cloudLoanPayments = cloudLoanPayments
+            )
+
+            // 3. Push merged local store documents that aren't in Firestore yet up to Firestore
+            val cloudTxIds = cloudTxs.map { it.id }.toSet()
+            val cloudAccMap = cloudAccounts.associateBy { it.id }
+            val cloudCatIds = cloudCategories.map { it.id }.toSet()
+            val cloudBudgetIds = cloudBudgets.map { it.id }.toSet()
+            val cloudGoalIds = cloudGoals.map { it.id }.toSet()
+            val cloudContribIds = cloudContribs.map { it.id }.toSet()
+            val cloudRecIds = cloudRecurring.map { it.id }.toSet()
+            val cloudLoanIds = cloudLoans.map { it.id }.toSet()
+            val cloudLpIds = cloudLoanPayments.map { it.id }.toSet()
+
+            for (acc in localStore.getAccountsSnapshot(cloudUid)) {
+                val existingCloud = cloudAccMap[acc.id]
+                if (existingCloud == null || existingCloud.currentBalancePaisa != acc.currentBalancePaisa) {
+                    val docRef = userDoc(cloudUid).collection("accounts").document(acc.id)
+                    docRef.set(
+                        acc.copy(
+                            id = acc.id,
+                            userId = cloudUid,
+                            createdAt = existingCloud?.createdAt,
+                            updatedAt = null
+                        )
+                    ).await()
+                }
+            }
+            for (cat in localStore.getCategoriesSnapshot(cloudUid)) {
+                if (cat.id !in cloudCatIds) {
+                    userDoc(cloudUid).collection("categories").document(cat.id)
+                        .set(cat.copy(id = cat.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+            for (tx in localStore.getTransactionsSnapshot(cloudUid)) {
+                if (tx.id !in cloudTxIds) {
+                    userDoc(cloudUid).collection("transactions").document(tx.id)
+                        .set(tx.copy(id = tx.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+            for (b in localStore.getBudgetsSnapshot(cloudUid)) {
+                if (b.id !in cloudBudgetIds) {
+                    userDoc(cloudUid).collection("budgets").document(b.id)
+                        .set(b.copy(id = b.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+            for (g in localStore.getGoalsSnapshot(cloudUid)) {
+                if (g.id !in cloudGoalIds) {
+                    userDoc(cloudUid).collection("savings_goals").document(g.id)
+                        .set(g.copy(id = g.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+            for (c in localStore.getContributionsSnapshot(cloudUid)) {
+                if (c.id !in cloudContribIds) {
+                    userDoc(cloudUid).collection("savings_contributions").document(c.id)
+                        .set(c.copy(id = c.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+            for (r in localStore.getRecurringSnapshot(cloudUid)) {
+                if (r.id !in cloudRecIds) {
+                    userDoc(cloudUid).collection("recurring_transactions").document(r.id)
+                        .set(r.copy(id = r.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+            for (l in localStore.getLoansSnapshot(cloudUid)) {
+                if (l.id !in cloudLoanIds) {
+                    userDoc(cloudUid).collection("loans").document(l.id)
+                        .set(l.copy(id = l.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+            for (lp in localStore.getLoanPaymentsSnapshot(cloudUid)) {
+                if (lp.id !in cloudLpIds) {
+                    userDoc(cloudUid).collection("loan_payments").document(lp.id)
+                        .set(lp.copy(id = lp.id, userId = cloudUid, createdAt = null, updatedAt = null)).await()
+                }
+            }
+        } catch (_: Exception) {
+            // Non-fatal background cloud sync
         }
     }
 
     // ========================================================================
-    // USER SETTINGS
+    // USER SETTINGS & PROFILE (GOOGLE AUTH IMAGE & NAME UPDATABLE)
     // ========================================================================
 
+    suspend fun updateUserProfile(
+        updatedSettings: UserSettings,
+        newPhotoUrl: String,
+        isCustomPhoto: Boolean = true
+    ) {
+        val uid = activeUserId()
+        localStore?.setPhotoUrl(uid, newPhotoUrl, isCustom = isCustomPhoto)
+        localStore?.updateSettings(uid, updatedSettings, markCustomName = true)
+
+        val googleUser = try { auth.currentUser } catch (_: Exception) { null }
+        if (googleUser != null) {
+            try {
+                val profileUpdates = userProfileChangeRequest {
+                    displayName = updatedSettings.displayName.take(120)
+                    if (newPhotoUrl.isNotBlank()) {
+                        photoUri = Uri.parse(newPhotoUrl)
+                    }
+                }
+                googleUser.updateProfile(profileUpdates).await()
+            } catch (_: Exception) {
+                // Ignore if photoUri cannot be updated on FirebaseAuth user object directly
+            }
+        }
+        updateSettings(updatedSettings)
+    }
+
     suspend fun updateSettings(updated: UserSettings) {
-        val uid = requireUserId()
+        val uid = activeUserId()
+        localStore?.updateSettings(uid, updated)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
         val docId = updated.id.ifBlank { "preferences" }
-        val docRef = userDoc(uid).collection("settings").document(docId)
+        val docRef = userDoc(cloudUid!!).collection("settings").document(docId)
         try {
             val snap = docRef.get().await()
             if (snap.exists()) {
@@ -256,7 +501,7 @@ class PersonalBmRepository(
                 docRef.set(
                     updated.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = preservedCreatedAt,
                         updatedAt = null
                     )
@@ -265,7 +510,7 @@ class PersonalBmRepository(
                 docRef.set(
                     updated.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = null,
                         updatedAt = null
                     )
@@ -274,8 +519,10 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+                throw e
+            }
         }
     }
 
@@ -284,15 +531,21 @@ class PersonalBmRepository(
     // ========================================================================
 
     suspend fun saveAccount(account: Account): String {
-        val uid = requireUserId()
+        val uid = activeUserId()
+        val localDocId = localStore?.saveAccount(uid, account)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localDocId != null) return localDocId
+            requireCloudUserId()
+        }
         val isNew = account.id.isBlank()
-        val docId = if (isNew) "acc_${UUID.randomUUID().toString().take(8)}" else account.id
-        val docRef = userDoc(uid).collection("accounts").document(docId)
+        val docId = localDocId ?: if (isNew) "acc_${UUID.randomUUID().toString().take(8)}" else account.id
+        val docRef = userDoc(cloudUid!!).collection("accounts").document(docId)
         try {
             if (isNew) {
                 val toCreate = account.copy(
                     id = docId,
-                    userId = uid,
+                    userId = cloudUid,
                     currentBalancePaisa = account.initialBalancePaisa,
                     createdAt = null,
                     updatedAt = null
@@ -305,7 +558,7 @@ class PersonalBmRepository(
                 val newCurrent = (existing?.currentBalancePaisa ?: account.currentBalancePaisa) + initialDiff
                 val toUpdate = account.copy(
                     id = docId,
-                    userId = uid,
+                    userId = cloudUid,
                     currentBalancePaisa = newCurrent,
                     createdAt = existing?.createdAt ?: account.createdAt,
                     updatedAt = null
@@ -316,27 +569,38 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
+                throw e
+            }
+            return docId
         }
     }
 
     suspend fun deleteAccount(accountId: String, existingTransactions: List<FinTransaction>) {
-        val uid = requireUserId()
+        val uid = activeUserId()
         val hasLinkedTx = existingTransactions.any {
             it.accountId == accountId || it.toAccountId == accountId
         }
         if (hasLinkedTx) {
             throw IllegalStateException("Cannot delete an account that has existing transactions. Delete or reassign its transactions first.")
         }
-        val docRef = userDoc(uid).collection("accounts").document(accountId)
+        localStore?.deleteAccount(uid, accountId)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val docRef = userDoc(cloudUid!!).collection("accounts").document(accountId)
         try {
             docRef.delete().await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.DELETE, docRef.path)
+                throw e
+            }
         }
     }
 
@@ -345,16 +609,22 @@ class PersonalBmRepository(
     // ========================================================================
 
     suspend fun saveCategory(category: Category): String {
-        val uid = requireUserId()
+        val uid = activeUserId()
+        val localDocId = localStore?.saveCategory(uid, category)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localDocId != null) return localDocId
+            requireCloudUserId()
+        }
         val isNew = category.id.isBlank()
-        val docId = if (isNew) "cat_${UUID.randomUUID().toString().take(8)}" else category.id
-        val docRef = userDoc(uid).collection("categories").document(docId)
+        val docId = localDocId ?: if (isNew) "cat_${UUID.randomUUID().toString().take(8)}" else category.id
+        val docRef = userDoc(cloudUid!!).collection("categories").document(docId)
         try {
             if (isNew) {
                 docRef.set(
                     category.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = null,
                         updatedAt = null
                     )
@@ -365,7 +635,7 @@ class PersonalBmRepository(
                 docRef.set(
                     category.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = existing?.createdAt ?: category.createdAt,
                         updatedAt = null
                     )
@@ -375,32 +645,37 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
+                throw e
+            }
+            return docId
         }
     }
 
     suspend fun deleteCategory(categoryId: String) {
-        val uid = requireUserId()
-        val docRef = userDoc(uid).collection("categories").document(categoryId)
+        val uid = activeUserId()
+        localStore?.deleteCategory(uid, categoryId)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val docRef = userDoc(cloudUid!!).collection("categories").document(categoryId)
         try {
             docRef.delete().await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.DELETE, docRef.path)
+                throw e
+            }
         }
     }
 
     // ========================================================================
     // TRANSACTIONS CRUD WITH ATOMIC ACCOUNT BALANCE RECONCILIATION
-    // Rules 1-6:
-    // 1. Expense reduces associated account balance
-    // 2. Income increases associated account balance
-    // 3. Transfer decreases source account and increases destination account
-    // 4. Editing reverses prior effect and applies new effect
-    // 5. Deleting reverses financial effect
     // ========================================================================
 
     private fun computeBalanceDeltas(tx: FinTransaction, multiplier: Long): Map<String, Long> {
@@ -429,19 +704,25 @@ class PersonalBmRepository(
     }
 
     suspend fun addTransaction(tx: FinTransaction): String {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(tx.amountPaisa > 0L) { "Transaction amount must be greater than zero." }
         if (tx.type == "TRANSFER") {
             require(tx.accountId.isNotBlank() && tx.toAccountId.isNotBlank() && tx.accountId != tx.toAccountId) {
                 "Transfer requires two distinct accounts."
             }
         }
-        val docId = tx.id.ifBlank { "tx_${UUID.randomUUID().toString().replace("-", "").take(12)}" }
-        val txRef = userDoc(uid).collection("transactions").document(docId)
+        val localDocId = localStore?.addTransaction(uid, tx)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localDocId != null) return localDocId
+            requireCloudUserId()
+        }
+        val docId = localDocId ?: tx.id.ifBlank { "tx_${UUID.randomUUID().toString().replace("-", "").take(12)}" }
+        val txRef = userDoc(cloudUid!!).collection("transactions").document(docId)
         try {
             val deltas = computeBalanceDeltas(tx, 1L)
             val accountSnaps = deltas.keys.associateWith { accId ->
-                userDoc(uid).collection("accounts").document(accId).get().await()
+                userDoc(cloudUid).collection("accounts").document(accId).get().await()
             }
 
             val batch = db.batch()
@@ -449,7 +730,7 @@ class PersonalBmRepository(
                 txRef,
                 tx.copy(
                     id = docId,
-                    userId = uid,
+                    userId = cloudUid,
                     createdAt = null,
                     updatedAt = null
                 )
@@ -460,12 +741,12 @@ class PersonalBmRepository(
                 val snap = accountSnaps[accId]
                 val accObj = snap?.toObject(Account::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
                 if (accObj != null) {
-                    val accRef = userDoc(uid).collection("accounts").document(accId)
+                    val accRef = userDoc(cloudUid).collection("accounts").document(accId)
                     batch.set(
                         accRef,
                         accObj.copy(
                             id = accId,
-                            userId = uid,
+                            userId = cloudUid,
                             currentBalancePaisa = accObj.currentBalancePaisa + delta,
                             updatedAt = null
                         )
@@ -477,40 +758,47 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, txRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.CREATE, txRef.path)
+                throw e
+            }
+            return docId
         }
     }
 
     suspend fun updateTransaction(updatedTx: FinTransaction) {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(updatedTx.id.isNotBlank()) { "Transaction ID required for update." }
         require(updatedTx.amountPaisa > 0L) { "Transaction amount must be greater than zero." }
-        val txRef = userDoc(uid).collection("transactions").document(updatedTx.id)
+        localStore?.updateTransaction(uid, updatedTx)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val txRef = userDoc(cloudUid!!).collection("transactions").document(updatedTx.id)
         try {
             val existingSnap = txRef.get().await()
             val oldTx = existingSnap.toObject(FinTransaction::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
                 ?: throw IllegalStateException("Original transaction not found.")
 
             val combinedDeltas = mutableMapOf<String, Long>()
-            // 1. Reverse old transaction effect (-1L)
             for ((accId, d) in computeBalanceDeltas(oldTx, -1L)) {
                 combinedDeltas[accId] = (combinedDeltas[accId] ?: 0L) + d
             }
-            // 2. Apply updated transaction effect (+1L)
             for ((accId, d) in computeBalanceDeltas(updatedTx, 1L)) {
                 combinedDeltas[accId] = (combinedDeltas[accId] ?: 0L) + d
             }
 
             val accountSnaps = combinedDeltas.keys.associateWith { accId ->
-                userDoc(uid).collection("accounts").document(accId).get().await()
+                userDoc(cloudUid).collection("accounts").document(accId).get().await()
             }
 
             val batch = db.batch()
             batch.set(
                 txRef,
                 updatedTx.copy(
-                    userId = uid,
+                    userId = cloudUid,
                     createdAt = oldTx.createdAt,
                     updatedAt = null
                 )
@@ -521,12 +809,12 @@ class PersonalBmRepository(
                 val snap = accountSnaps[accId]
                 val accObj = snap?.toObject(Account::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
                 if (accObj != null) {
-                    val accRef = userDoc(uid).collection("accounts").document(accId)
+                    val accRef = userDoc(cloudUid).collection("accounts").document(accId)
                     batch.set(
                         accRef,
                         accObj.copy(
                             id = accId,
-                            userId = uid,
+                            userId = cloudUid,
                             currentBalancePaisa = accObj.currentBalancePaisa + delta,
                             updatedAt = null
                         )
@@ -537,14 +825,22 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, txRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.UPDATE, txRef.path)
+                throw e
+            }
         }
     }
 
     suspend fun deleteTransaction(txId: String) {
-        val uid = requireUserId()
-        val txRef = userDoc(uid).collection("transactions").document(txId)
+        val uid = activeUserId()
+        localStore?.deleteTransaction(uid, txId)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val txRef = userDoc(cloudUid!!).collection("transactions").document(txId)
         try {
             val existingSnap = txRef.get().await()
             val oldTx = existingSnap.toObject(FinTransaction::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
@@ -552,7 +848,7 @@ class PersonalBmRepository(
 
             val reversalDeltas = computeBalanceDeltas(oldTx, -1L)
             val accountSnaps = reversalDeltas.keys.associateWith { accId ->
-                userDoc(uid).collection("accounts").document(accId).get().await()
+                userDoc(cloudUid).collection("accounts").document(accId).get().await()
             }
 
             val batch = db.batch()
@@ -563,12 +859,12 @@ class PersonalBmRepository(
                 val snap = accountSnaps[accId]
                 val accObj = snap?.toObject(Account::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
                 if (accObj != null) {
-                    val accRef = userDoc(uid).collection("accounts").document(accId)
+                    val accRef = userDoc(cloudUid).collection("accounts").document(accId)
                     batch.set(
                         accRef,
                         accObj.copy(
                             id = accId,
-                            userId = uid,
+                            userId = cloudUid,
                             currentBalancePaisa = accObj.currentBalancePaisa + delta,
                             updatedAt = null
                         )
@@ -579,8 +875,10 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, txRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.DELETE, txRef.path)
+                throw e
+            }
         }
     }
 
@@ -589,10 +887,16 @@ class PersonalBmRepository(
     // ========================================================================
 
     suspend fun saveBudget(budget: Budget): String {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(budget.limitPaisa > 0L) { "Budget limit must be positive." }
-        val docId = budget.id.ifBlank { "bgt_${budget.monthKey}_${budget.categoryId}" }
-        val docRef = userDoc(uid).collection("budgets").document(docId)
+        val localDocId = localStore?.saveBudget(uid, budget)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localDocId != null) return localDocId
+            requireCloudUserId()
+        }
+        val docId = localDocId ?: budget.id.ifBlank { "bgt_${budget.monthKey}_${budget.categoryId}" }
+        val docRef = userDoc(cloudUid!!).collection("budgets").document(docId)
         try {
             val snap = docRef.get().await()
             if (snap.exists()) {
@@ -600,7 +904,7 @@ class PersonalBmRepository(
                 docRef.set(
                     budget.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = existing?.createdAt ?: budget.createdAt,
                         updatedAt = null
                     )
@@ -609,7 +913,7 @@ class PersonalBmRepository(
                 docRef.set(
                     budget.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = null,
                         updatedAt = null
                     )
@@ -619,41 +923,57 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.WRITE, docRef.path)
+                throw e
+            }
+            return docId
         }
     }
 
     suspend fun deleteBudget(budgetId: String) {
-        val uid = requireUserId()
-        val docRef = userDoc(uid).collection("budgets").document(budgetId)
+        val uid = activeUserId()
+        localStore?.deleteBudget(uid, budgetId)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val docRef = userDoc(cloudUid!!).collection("budgets").document(budgetId)
         try {
             docRef.delete().await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.DELETE, docRef.path)
+                throw e
+            }
         }
     }
 
     // ========================================================================
     // SAVINGS GOALS & CONTRIBUTIONS
-    // Rule: Do not double-count goal contributions as income.
     // ========================================================================
 
     suspend fun saveSavingsGoal(goal: SavingsGoal): String {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(goal.targetAmountPaisa > 0L) { "Target amount must be greater than zero." }
+        val localDocId = localStore?.saveSavingsGoal(uid, goal)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localDocId != null) return localDocId
+            requireCloudUserId()
+        }
         val isNew = goal.id.isBlank()
-        val docId = if (isNew) "goal_${UUID.randomUUID().toString().take(8)}" else goal.id
-        val docRef = userDoc(uid).collection("savings_goals").document(docId)
+        val docId = localDocId ?: if (isNew) "goal_${UUID.randomUUID().toString().take(8)}" else goal.id
+        val docRef = userDoc(cloudUid!!).collection("savings_goals").document(docId)
         try {
             if (isNew) {
                 docRef.set(
                     goal.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = null,
                         updatedAt = null
                     )
@@ -664,7 +984,7 @@ class PersonalBmRepository(
                 docRef.set(
                     goal.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = existing?.createdAt ?: goal.createdAt,
                         updatedAt = null
                     )
@@ -674,8 +994,11 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
+                throw e
+            }
+            return docId
         }
     }
 
@@ -686,37 +1009,41 @@ class PersonalBmRepository(
         sourceAccountName: String,
         notes: String
     ) {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(amountPaisa > 0L) { "Contribution amount must be positive." }
-        val goalRef = userDoc(uid).collection("savings_goals").document(goalId)
+        localStore?.addSavingsContribution(uid, goalId, amountPaisa, sourceAccountId, sourceAccountName, notes)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val goalRef = userDoc(cloudUid!!).collection("savings_goals").document(goalId)
         val contribId = "sc_${UUID.randomUUID().toString().take(10)}"
-        val contribRef = userDoc(uid).collection("savings_contributions").document(contribId)
+        val contribRef = userDoc(cloudUid).collection("savings_contributions").document(contribId)
         try {
             val goalSnap = goalRef.get().await()
             val goal = goalSnap.toObject(SavingsGoal::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
                 ?: throw IllegalStateException("Savings goal not found.")
 
             val accSnap = if (sourceAccountId.isNotBlank()) {
-                userDoc(uid).collection("accounts").document(sourceAccountId).get().await()
+                userDoc(cloudUid).collection("accounts").document(sourceAccountId).get().await()
             } else null
 
             val batch = db.batch()
-            // 1. Update goal's saved amount
             batch.set(
                 goalRef,
                 goal.copy(
                     id = goalId,
-                    userId = uid,
+                    userId = cloudUid,
                     currentSavedPaisa = goal.currentSavedPaisa + amountPaisa,
                     updatedAt = null
                 )
             )
-            // 2. Record contribution history (not counted as income!)
             batch.set(
                 contribRef,
                 SavingsContribution(
                     id = contribId,
-                    userId = uid,
+                    userId = cloudUid,
                     goalId = goalId,
                     goalName = goal.name,
                     amountPaisa = amountPaisa,
@@ -728,15 +1055,14 @@ class PersonalBmRepository(
                     updatedAt = null
                 )
             )
-            // 3. If a source account was selected, deduct allocated savings from that account balance
             val accObj = accSnap?.toObject(Account::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
             if (accObj != null && sourceAccountId.isNotBlank()) {
-                val accRef = userDoc(uid).collection("accounts").document(sourceAccountId)
+                val accRef = userDoc(cloudUid).collection("accounts").document(sourceAccountId)
                 batch.set(
                     accRef,
                     accObj.copy(
                         id = sourceAccountId,
-                        userId = uid,
+                        userId = cloudUid,
                         currentBalancePaisa = accObj.currentBalancePaisa - amountPaisa,
                         updatedAt = null
                     )
@@ -746,21 +1072,73 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, goalRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.WRITE, goalRef.path)
+                throw e
+            }
         }
     }
 
+    /**
+     * One-step savings insertion: finds an existing savings goal by name (or creates one if none matches)
+     * and records the contribution + deducts from the source wallet if specified.
+     */
+    suspend fun allocateQuickSavings(
+        goalName: String,
+        amountPaisa: Long,
+        targetAmountPaisa: Long,
+        sourceAccountId: String,
+        sourceAccountName: String,
+        notes: String
+    ) {
+        val uid = activeUserId()
+        require(amountPaisa > 0L) { "Savings amount must be greater than zero." }
+        val cleanName = goalName.trim().ifBlank { "Monthly Savings" }
+        val existingGoals = observeSavingsGoals(uid).firstOrNull() ?: emptyList()
+        val matchingGoal = existingGoals.firstOrNull { it.name.equals(cleanName, ignoreCase = true) }
+        val goalId = if (matchingGoal != null) {
+            matchingGoal.id
+        } else {
+            val effectiveTarget = if (targetAmountPaisa >= amountPaisa) targetAmountPaisa else (amountPaisa * 5L)
+            saveSavingsGoal(
+                SavingsGoal(
+                    name = cleanName.take(120),
+                    targetAmountPaisa = effectiveTarget,
+                    currentSavedPaisa = 0L,
+                    targetDateEpochDay = DhakaDateUtils.todayEpochDay() + 180L,
+                    description = notes.take(500),
+                    colorHex = "#10B981",
+                    iconName = "savings"
+                )
+            )
+        }
+        addSavingsContribution(
+            goalId = goalId,
+            amountPaisa = amountPaisa,
+            sourceAccountId = sourceAccountId,
+            sourceAccountName = sourceAccountName,
+            notes = notes
+        )
+    }
+
     suspend fun deleteSavingsGoal(goalId: String) {
-        val uid = requireUserId()
-        val docRef = userDoc(uid).collection("savings_goals").document(goalId)
+        val uid = activeUserId()
+        localStore?.deleteSavingsGoal(uid, goalId)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val docRef = userDoc(cloudUid!!).collection("savings_goals").document(goalId)
         try {
             docRef.delete().await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.DELETE, docRef.path)
+                throw e
+            }
         }
     }
 
@@ -769,17 +1147,23 @@ class PersonalBmRepository(
     // ========================================================================
 
     suspend fun saveRecurringRule(rule: RecurringTransaction): String {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(rule.amountPaisa > 0L) { "Recurring amount must be positive." }
+        val localDocId = localStore?.saveRecurringRule(uid, rule)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localDocId != null) return localDocId
+            requireCloudUserId()
+        }
         val isNew = rule.id.isBlank()
-        val docId = if (isNew) "rec_${UUID.randomUUID().toString().take(8)}" else rule.id
-        val docRef = userDoc(uid).collection("recurring_transactions").document(docId)
+        val docId = localDocId ?: if (isNew) "rec_${UUID.randomUUID().toString().take(8)}" else rule.id
+        val docRef = userDoc(cloudUid!!).collection("recurring_transactions").document(docId)
         try {
             if (isNew) {
                 docRef.set(
                     rule.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = null,
                         updatedAt = null
                     )
@@ -790,7 +1174,7 @@ class PersonalBmRepository(
                 docRef.set(
                     rule.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         createdAt = existing?.createdAt ?: rule.createdAt,
                         updatedAt = null
                     )
@@ -800,8 +1184,11 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
+                throw e
+            }
+            return docId
         }
     }
 
@@ -810,31 +1197,36 @@ class PersonalBmRepository(
     }
 
     suspend fun deleteRecurringRule(ruleId: String) {
-        val uid = requireUserId()
-        val docRef = userDoc(uid).collection("recurring_transactions").document(ruleId)
+        val uid = activeUserId()
+        localStore?.deleteRecurringRule(uid, ruleId)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val docRef = userDoc(cloudUid!!).collection("recurring_transactions").document(ruleId)
         try {
             docRef.delete().await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.DELETE, docRef.path)
+                throw e
+            }
         }
     }
 
-    /**
-     * Checks all active recurring transactions whose nextDueDateEpochDay <= todayEpochDay.
-     * Uses deterministic transaction document IDs ("tx_rec_${rule.id}_${dueEpochDay}")
-     * so reopening the app never duplicates an already-posted recurring transaction.
-     * Returns the count of newly posted recurring transactions.
-     */
     suspend fun processDueRecurringRules(rules: List<RecurringTransaction>): Int {
-        val uid = requireUserId()
+        val uid = activeUserId()
         val today = DhakaDateUtils.todayEpochDay()
         val dueRules = rules.filter {
             it.isActive && it.nextDueDateEpochDay in 1..today && it.lastProcessedDateEpochDay < it.nextDueDateEpochDay
         }
         if (dueRules.isEmpty()) return 0
+
+        val existingTxs = observeTransactions(uid).firstOrNull() ?: emptyList()
+        val existingTxIds = existingTxs.map { it.id }.toSet()
 
         var postedCount = 0
         for (rule in dueRules) {
@@ -845,9 +1237,13 @@ class PersonalBmRepository(
             while (dueDay <= today && safetyCounter < 12) {
                 safetyCounter++
                 val deterministicTxId = "tx_rec_${rule.id}_$dueDay"
-                val txRef = userDoc(uid).collection("transactions").document(deterministicTxId)
-                val existingTxSnap = txRef.get().await()
-                if (!existingTxSnap.exists()) {
+                val alreadyPosted = if (localStore != null) {
+                    existingTxIds.contains(deterministicTxId)
+                } else {
+                    val txRef = userDoc(uid).collection("transactions").document(deterministicTxId)
+                    txRef.get().await().exists()
+                }
+                if (!alreadyPosted) {
                     val newTx = FinTransaction(
                         id = deterministicTxId,
                         userId = uid,
@@ -877,7 +1273,6 @@ class PersonalBmRepository(
                 dueDay = DhakaDateUtils.advanceDueDate(dueDay, rule.frequency)
             }
 
-            // Update the rule's nextDueDateEpochDay and lastProcessedDateEpochDay
             saveRecurringRule(
                 rule.copy(
                     nextDueDateEpochDay = dueDay,
@@ -893,18 +1288,24 @@ class PersonalBmRepository(
     // ========================================================================
 
     suspend fun saveLoan(loan: LoanRecord): String {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(loan.principalAmountPaisa > 0L) { "Loan principal must be greater than zero." }
+        val localDocId = localStore?.saveLoan(uid, loan)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localDocId != null) return localDocId
+            requireCloudUserId()
+        }
         val isNew = loan.id.isBlank()
-        val docId = if (isNew) "loan_${UUID.randomUUID().toString().take(8)}" else loan.id
-        val docRef = userDoc(uid).collection("loans").document(docId)
+        val docId = localDocId ?: if (isNew) "loan_${UUID.randomUUID().toString().take(8)}" else loan.id
+        val docRef = userDoc(cloudUid!!).collection("loans").document(docId)
         try {
             if (isNew) {
                 val status = if (loan.outstandingAmountPaisa <= 0L) "PAID" else "ACTIVE"
                 docRef.set(
                     loan.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         status = status,
                         createdAt = null,
                         updatedAt = null
@@ -917,7 +1318,7 @@ class PersonalBmRepository(
                 docRef.set(
                     loan.copy(
                         id = docId,
-                        userId = uid,
+                        userId = cloudUid,
                         status = status,
                         createdAt = existing?.createdAt ?: loan.createdAt,
                         updatedAt = null
@@ -928,8 +1329,11 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, if (isNew) OperationType.CREATE else OperationType.UPDATE, docRef.path)
+                throw e
+            }
+            return docId
         }
     }
 
@@ -940,13 +1344,19 @@ class PersonalBmRepository(
         accountName: String,
         notes: String
     ) {
-        val uid = requireUserId()
+        val uid = activeUserId()
         require(paymentAmountPaisa > 0L) { "Payment amount must be positive." }
         require(loan.status == "ACTIVE") { "This loan is already marked as paid." }
+        localStore?.addLoanPayment(uid, loan, paymentAmountPaisa, accountId, accountName, notes)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
 
-        val loanRef = userDoc(uid).collection("loans").document(loan.id)
+        val loanRef = userDoc(cloudUid!!).collection("loans").document(loan.id)
         val paymentId = "lp_${UUID.randomUUID().toString().take(10)}"
-        val paymentRef = userDoc(uid).collection("loan_payments").document(paymentId)
+        val paymentRef = userDoc(cloudUid).collection("loan_payments").document(paymentId)
 
         try {
             val loanSnap = loanRef.get().await()
@@ -957,27 +1367,25 @@ class PersonalBmRepository(
             val newStatus = if (newOutstanding == 0L) "PAID" else "ACTIVE"
 
             val accSnap = if (accountId.isNotBlank()) {
-                userDoc(uid).collection("accounts").document(accountId).get().await()
+                userDoc(cloudUid).collection("accounts").document(accountId).get().await()
             } else null
 
             val batch = db.batch()
-            // 1. Update loan outstanding balance & status
             batch.set(
                 loanRef,
                 existingLoan.copy(
                     id = existingLoan.id,
-                    userId = uid,
+                    userId = cloudUid,
                     outstandingAmountPaisa = newOutstanding,
                     status = newStatus,
                     updatedAt = null
                 )
             )
-            // 2. Record loan payment entry
             batch.set(
                 paymentRef,
                 LoanPayment(
                     id = paymentId,
-                    userId = uid,
+                    userId = cloudUid,
                     loanId = existingLoan.id,
                     personOrOrg = existingLoan.personOrOrg,
                     amountPaisa = paymentAmountPaisa,
@@ -989,17 +1397,15 @@ class PersonalBmRepository(
                     updatedAt = null
                 )
             )
-            // 3. Update account balance if an account was chosen:
-            // Repaying BORROWED money decreases our account balance; receiving LENT repayment increases it.
             val accObj = accSnap?.toObject(Account::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
             if (accObj != null && accountId.isNotBlank()) {
                 val delta = if (existingLoan.type == "BORROWED") -paymentAmountPaisa else paymentAmountPaisa
-                val accRef = userDoc(uid).collection("accounts").document(accountId)
+                val accRef = userDoc(cloudUid).collection("accounts").document(accountId)
                 batch.set(
                     accRef,
                     accObj.copy(
                         id = accountId,
-                        userId = uid,
+                        userId = cloudUid,
                         currentBalancePaisa = accObj.currentBalancePaisa + delta,
                         updatedAt = null
                     )
@@ -1009,21 +1415,31 @@ class PersonalBmRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, loanRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.WRITE, loanRef.path)
+                throw e
+            }
         }
     }
 
     suspend fun deleteLoan(loanId: String) {
-        val uid = requireUserId()
-        val docRef = userDoc(uid).collection("loans").document(loanId)
+        val uid = activeUserId()
+        localStore?.deleteLoan(uid, loanId)
+        val cloudUid = auth.currentUser?.uid
+        if (cloudUid == null) {
+            if (localStore != null) return
+            requireCloudUserId()
+        }
+        val docRef = userDoc(cloudUid!!).collection("loans").document(loanId)
         try {
             docRef.delete().await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
+            if (localStore == null) {
+                handleFirestoreError(e, OperationType.DELETE, docRef.path)
+                throw e
+            }
         }
     }
 }

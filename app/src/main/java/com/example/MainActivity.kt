@@ -6,8 +6,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +52,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
@@ -58,10 +67,24 @@ import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -71,11 +94,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -107,15 +133,18 @@ import com.example.data.model.DhakaDateUtils
 import com.example.data.model.FinTransaction
 import com.example.data.model.MoneyUtils
 import com.example.data.model.NavSection
+import com.example.data.repository.LocalPersonalBmStore
 import com.example.data.repository.PersonalBmRepository
 import com.example.ui.components.AddEditTransactionModal
 import com.example.ui.components.ConfirmDeleteDialog
+import com.example.ui.components.UserAvatarBadge
 import com.example.ui.screens.AccountsAndWalletsScreen
 import com.example.ui.screens.AnalyticsScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.BudgetsScreen
 import com.example.ui.screens.CategoryTypedModuleScreen
 import com.example.ui.screens.FinancialCalendarScreen
+import com.example.ui.screens.LifeEventsScreen
 import com.example.ui.screens.LoansAndDebtsScreen
 import com.example.ui.screens.OverviewScreen
 import com.example.ui.screens.RecurringTransactionsScreen
@@ -123,19 +152,21 @@ import com.example.ui.screens.ReportsAndExportsScreen
 import com.example.ui.screens.SavingsGoalsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TransactionsScreen
+import com.example.ui.screens.onGoogleSignInClicked
 import com.example.ui.screens.signOut
 import com.example.ui.theme.AmberWarning
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.CrimsonDanger
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.PersonalBMTheme
 import com.example.ui.theme.RoyalBlue
 import com.example.ui.theme.RoyalBlueSoft
+import com.example.ui.theme.isEffectiveDarkTheme
 import com.example.ui.viewmodel.PersonalBmUiState
 import com.example.ui.viewmodel.PersonalBmViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
-import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,50 +180,72 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppRoot() {
-    var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
+    var currentUser by remember {
+        mutableStateOf(
+            try {
+                Firebase.auth.currentUser
+            } catch (_: Exception) {
+                null
+            }
+        )
+    }
 
     DisposableEffect(Unit) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
             currentUser = auth.currentUser
         }
-        Firebase.auth.addAuthStateListener(listener)
+        try {
+            Firebase.auth.addAuthStateListener(listener)
+        } catch (_: Exception) {
+            // Ignore if Firebase auth is offline
+        }
         onDispose {
-            Firebase.auth.removeAuthStateListener(listener)
+            try {
+                Firebase.auth.removeAuthStateListener(listener)
+            } catch (_: Exception) {
+                // Ignore
+            }
         }
     }
 
-    if (currentUser == null) {
-        PersonalBMTheme(themeMode = "light") {
-            AuthScreen(
-                onAuthSuccess = { currentUser = Firebase.auth.currentUser }
-            )
-        }
-    } else {
-        val user = currentUser!!
-        key(user.uid) {
-            val vm: PersonalBmViewModel = viewModel(
-                key = user.uid,
-                factory = viewModelFactory {
-                    initializer {
-                        val app = checkNotNull(this[APPLICATION_KEY]) as Application
-                        val databaseId = app.getString(R.string.firestore_database_id)
-                        val db = FirebaseFirestore.getInstance(databaseId)
-                        PersonalBmViewModel(
-                            repository = PersonalBmRepository(db),
-                            currentUserId = user.uid,
-                            initialDisplayName = user.displayName ?: "Personal BM User",
-                            initialEmail = user.email ?: ""
-                        )
-                    }
+    val effectiveUid = currentUser?.uid ?: LocalPersonalBmStore.DEFAULT_LOCAL_USER_ID
+    val effectiveName = currentUser?.displayName?.takeIf { it.isNotBlank() } ?: "Guest"
+    val effectiveEmail = currentUser?.email?.takeIf { it.isNotBlank() } ?: "guest@personalbm.app"
+    val effectivePhotoUrl = currentUser?.photoUrl?.toString().orEmpty()
+
+    key(effectiveUid) {
+        val vm: PersonalBmViewModel = viewModel(
+            key = effectiveUid,
+            factory = viewModelFactory {
+                initializer {
+                    val app = checkNotNull(this[APPLICATION_KEY]) as Application
+                    PersonalBmViewModel(
+                        repository = PersonalBmRepository(app),
+                        currentUserId = effectiveUid,
+                        initialDisplayName = effectiveName,
+                        initialEmail = effectiveEmail,
+                        initialPhotoUrl = effectivePhotoUrl
+                    )
                 }
-            )
-            PersonalBmAppShell(viewModel = vm)
-        }
+            }
+        )
+        PersonalBmAppShell(
+            viewModel = vm,
+            isCloudSignedIn = currentUser != null,
+            onAuthStateUpdated = {
+                currentUser = try {
+                    Firebase.auth.currentUser
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        )
     }
 }
 
 fun iconForNavSection(section: NavSection): ImageVector = when (section) {
     NavSection.OVERVIEW -> Icons.Default.Dashboard
+    NavSection.EVENTS -> Icons.Default.Celebration
     NavSection.TRANSACTIONS -> Icons.AutoMirrored.Filled.ListAlt
     NavSection.INCOME -> Icons.AutoMirrored.Filled.TrendingUp
     NavSection.EXPENSES -> Icons.AutoMirrored.Filled.TrendingDown
@@ -210,7 +263,9 @@ fun iconForNavSection(section: NavSection): ImageVector = when (section) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonalBmAppShell(
-    viewModel: PersonalBmViewModel
+    viewModel: PersonalBmViewModel,
+    isCloudSignedIn: Boolean = false,
+    onAuthStateUpdated: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -220,10 +275,13 @@ fun PersonalBmAppShell(
 
     var showTransactionModal by remember { mutableStateOf(false) }
     var modalDefaultType by remember { mutableStateOf("EXPENSE") }
+    var modalDefaultDateEpochDay by remember { mutableStateOf<Long?>(null) }
     var editingTransaction by remember { mutableStateOf<FinTransaction?>(null) }
     var deletingTransaction by remember { mutableStateOf<FinTransaction?>(null) }
     var showMoreDrawerSheet by remember { mutableStateOf(false) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
+    var showProfileAccountSheet by remember { mutableStateOf(false) }
+    var showGoogleSignInSheet by remember { mutableStateOf(false) }
     var sidebarCollapsed by remember { mutableStateOf(false) }
 
     // BackHandler on secondary sections returns to Overview
@@ -258,11 +316,14 @@ fun PersonalBmAppShell(
         budgetWarnings + dueRecurring
     }
 
-    PersonalBMTheme(themeMode = uiState.settings.themeMode) {
+    val isDarkEffective = isEffectiveDarkTheme(uiState.settings.themeMode)
+
+    AppTheme(themeMode = uiState.settings.themeMode, darkTheme = isDarkEffective) {
         if (showTransactionModal) {
             AddEditTransactionModal(
                 initialTransaction = editingTransaction,
                 defaultType = modalDefaultType,
+                defaultDateEpochDay = modalDefaultDateEpochDay,
                 accounts = uiState.accounts,
                 categories = uiState.categories,
                 defaultAccountId = uiState.settings.defaultAccountId,
@@ -270,9 +331,71 @@ fun PersonalBmAppShell(
                 onDismiss = {
                     showTransactionModal = false
                     editingTransaction = null
+                    modalDefaultDateEpochDay = null
                 },
                 onSave = { tx, isEdit ->
                     viewModel.saveTransaction(tx, isEdit)
+                }
+            )
+        }
+
+        if (showGoogleSignInSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showGoogleSignInSheet = false },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                    AuthScreen(
+                        onAuthSuccess = {
+                            showGoogleSignInSheet = false
+                            showProfileAccountSheet = false
+                            onAuthStateUpdated()
+                        }
+                    )
+                }
+            }
+        }
+
+        if (showProfileAccountSheet) {
+            ProfileAndCloudAccountSheet(
+                uiState = uiState,
+                isCloudSignedIn = isCloudSignedIn,
+                onDismiss = { showProfileAccountSheet = false },
+                onGoogleLoginClick = {
+                    onGoogleSignInClicked(
+                        context = context,
+                        credentialManager = credentialManager,
+                        onAuthSuccess = {
+                            showProfileAccountSheet = false
+                            onAuthStateUpdated()
+                        },
+                        onAuthError = {
+                            showProfileAccountSheet = false
+                            showGoogleSignInSheet = true
+                        },
+                        scope = scope,
+                        onAuthCancelled = {}
+                    )
+                },
+                onSyncToCloud = {
+                    viewModel.syncWithFirebaseCloud()
+                },
+                onSignOutToGuest = {
+                    signOut(
+                        credentialManager = credentialManager,
+                        scope = scope,
+                        onSignOutComplete = {
+                            showProfileAccountSheet = false
+                            onAuthStateUpdated()
+                        }
+                    )
+                },
+                onUpdateUserProfile = { updatedSettings, newPhotoUrl, isCustomPhoto ->
+                    viewModel.updateUserProfile(updatedSettings, newPhotoUrl, isCustomPhoto)
+                },
+                onOpenFullSettings = {
+                    showProfileAccountSheet = false
+                    viewModel.navigateTo(NavSection.SETTINGS)
                 }
             )
         }
@@ -367,6 +490,7 @@ fun PersonalBmAppShell(
                         onClick = {
                             editingTransaction = null
                             modalDefaultType = "EXPENSE"
+                            modalDefaultDateEpochDay = null
                             showTransactionModal = true
                         },
                         shape = RoundedCornerShape(14.dp),
@@ -379,12 +503,12 @@ fun PersonalBmAppShell(
                 },
                 bottomBar = {
                     if (!isTabletOrDesktop) {
-                        // Mobile Bottom Navigation: Home | Transactions | Analytics | Wallets | More
+                        // Mobile Bottom Navigation: Home | Transactions | Events | Analytics | More
                         val mobileTabs = listOf(
                             NavSection.OVERVIEW to (if (uiState.settings.language == "bn") "হোম" else "Home"),
-                            NavSection.TRANSACTIONS to (if (uiState.settings.language == "bn") "লেনদেন" else "Transactions"),
-                            NavSection.ANALYTICS to (if (uiState.settings.language == "bn") "অ্যানালিটিক্স" else "Analytics"),
-                            NavSection.ACCOUNTS to (if (uiState.settings.language == "bn") "ওয়ালেট" else "Wallets")
+                            NavSection.TRANSACTIONS to (if (uiState.settings.language == "bn") "লেনদেন" else "Ledger"),
+                            NavSection.EVENTS to (if (uiState.settings.language == "bn") "ইভেন্ট" else "Events"),
+                            NavSection.ANALYTICS to (if (uiState.settings.language == "bn") "চার্ট" else "Charts")
                         )
                         Column {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -414,7 +538,7 @@ fun PersonalBmAppShell(
                                         colors = NavigationBarItemDefaults.colors(
                                             selectedIconColor = RoyalBlue,
                                             selectedTextColor = RoyalBlue,
-                                            indicatorColor = RoyalBlueSoft,
+                                            indicatorColor = RoyalBlue.copy(alpha = 0.14f),
                                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                         ),
@@ -435,7 +559,7 @@ fun PersonalBmAppShell(
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = RoyalBlue,
                                         selectedTextColor = RoyalBlue,
-                                        indicatorColor = RoyalBlueSoft,
+                                        indicatorColor = RoyalBlue.copy(alpha = 0.14f),
                                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
@@ -472,6 +596,7 @@ fun PersonalBmAppShell(
                         if (isTabletOrDesktop) {
                             DesktopTopNavBar(
                                 uiState = uiState,
+                                isDarkTheme = isDarkEffective,
                                 activeAlertsCount = activeAlertsCount,
                                 onSearchQueryChange = { q ->
                                     viewModel.updateTransactionFilter { it.copy(searchQuery = q, currentPage = 1) }
@@ -482,22 +607,24 @@ fun PersonalBmAppShell(
                                 onMonthChange = { viewModel.setSelectedMonthKey(it) },
                                 onNotificationsClick = { showNotificationsSheet = true },
                                 onToggleTheme = {
-                                    val nextTheme = if (uiState.settings.themeMode == "dark") "light" else "dark"
+                                    val nextTheme = if (isDarkEffective) "light" else "dark"
                                     viewModel.updateSettings(uiState.settings.copy(themeMode = nextTheme))
                                 },
-                                onProfileClick = { viewModel.navigateTo(NavSection.SETTINGS) }
+                                onProfileClick = { showProfileAccountSheet = true }
                             )
                         } else {
                             MobileGreetingHeader(
-                                displayName = uiState.settings.displayName.ifBlank { "Personal BM" },
-                                themeMode = uiState.settings.themeMode,
+                                displayName = uiState.settings.displayName.ifBlank { "Guest" },
+                                photoUrl = uiState.photoUrl,
+                                isCloudSignedIn = isCloudSignedIn,
+                                isDarkTheme = isDarkEffective,
                                 activeAlertsCount = activeAlertsCount,
                                 onNotificationsClick = { showNotificationsSheet = true },
                                 onToggleTheme = {
-                                    val nextTheme = if (uiState.settings.themeMode == "dark") "light" else "dark"
+                                    val nextTheme = if (isDarkEffective) "light" else "dark"
                                     viewModel.updateSettings(uiState.settings.copy(themeMode = nextTheme))
                                 },
-                                onProfileClick = { viewModel.navigateTo(NavSection.SETTINGS) }
+                                onProfileClick = { showProfileAccountSheet = true }
                             )
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -512,10 +639,14 @@ fun PersonalBmAppShell(
                                     CircularProgressIndicator(color = RoyalBlue)
                                 }
                             } else {
-                                Crossfade(
+                                AnimatedContent(
                                     targetState = uiState.currentSection,
-                                    animationSpec = tween(durationMillis = 220),
-                                    label = "nav_section_crossfade"
+                                    transitionSpec = {
+                                        (fadeIn(animationSpec = tween(240)) +
+                                            slideInVertically(animationSpec = tween(260)) { it / 22 })
+                                            .togetherWith(fadeOut(animationSpec = tween(150)))
+                                    },
+                                    label = "nav_section_animated_content"
                                 ) { section ->
                                     when (section) {
                                         NavSection.OVERVIEW -> OverviewScreen(
@@ -523,30 +654,72 @@ fun PersonalBmAppShell(
                                             onAddTransactionClick = {
                                                 editingTransaction = null
                                                 modalDefaultType = "EXPENSE"
+                                                modalDefaultDateEpochDay = null
                                                 showTransactionModal = true
                                             },
                                             onAddExpenseClick = {
                                                 editingTransaction = null
                                                 modalDefaultType = "EXPENSE"
+                                                modalDefaultDateEpochDay = null
                                                 showTransactionModal = true
                                             },
                                             onAddIncomeClick = {
                                                 editingTransaction = null
                                                 modalDefaultType = "INCOME"
+                                                modalDefaultDateEpochDay = null
                                                 showTransactionModal = true
                                             },
                                             onTransferMoneyClick = {
                                                 editingTransaction = null
                                                 modalDefaultType = "TRANSFER"
+                                                modalDefaultDateEpochDay = null
                                                 showTransactionModal = true
+                                            },
+                                            onQuickAllowance = { amt, title, accId, accName, setBudget, dateEpochDay, timeFormatted ->
+                                                viewModel.addQuickAllowanceOrIncome(amt, title, accId, accName, setBudget, dateEpochDay, timeFormatted)
+                                            },
+                                            onQuickExpense = { whereTitle, amt, catId, catName, accId, accName, notes, dateEpochDay, timeFormatted ->
+                                                viewModel.addQuickExpense(whereTitle, amt, catId, catName, accId, accName, notes, dateEpochDay, timeFormatted)
+                                            },
+                                            onQuickSavings = { goalName, amt, targetAmt, accId, accName, notes ->
+                                                viewModel.addQuickSavings(goalName, amt, targetAmt, accId, accName, notes)
+                                            },
+                                            onQuickEventExpense = { eventType, eventName, items, accId, accName, extraNotes, dateEpochDay, timeFormatted ->
+                                                viewModel.addEventExpenseWithBreakdown(
+                                                    eventType = eventType,
+                                                    eventName = eventName,
+                                                    items = items,
+                                                    accountId = accId,
+                                                    accountName = accName,
+                                                    extraNotes = extraNotes,
+                                                    dateEpochDay = dateEpochDay,
+                                                    timeFormatted = timeFormatted
+                                                )
                                             },
                                             onEditTransaction = { tx ->
                                                 editingTransaction = tx
+                                                modalDefaultDateEpochDay = null
                                                 showTransactionModal = true
                                             },
                                             onDuplicateTransaction = { tx -> viewModel.duplicateTransaction(tx) },
                                             onDeleteTransaction = { tx -> deletingTransaction = tx },
                                             onNavigate = { viewModel.navigateTo(it) }
+                                        )
+                                        NavSection.EVENTS -> LifeEventsScreen(
+                                            uiState = uiState,
+                                            onRecordEventExpense = { eventType, eventName, items, accId, accName, extraNotes, dateEpochDay, timeFormatted ->
+                                                viewModel.addEventExpenseWithBreakdown(
+                                                    eventType = eventType,
+                                                    eventName = eventName,
+                                                    items = items,
+                                                    accountId = accId,
+                                                    accountName = accName,
+                                                    extraNotes = extraNotes,
+                                                    dateEpochDay = dateEpochDay,
+                                                    timeFormatted = timeFormatted
+                                                )
+                                            },
+                                            onDeleteTransaction = { tx -> deletingTransaction = tx }
                                         )
                                         NavSection.TRANSACTIONS -> TransactionsScreen(
                                             uiState = uiState,
@@ -651,8 +824,15 @@ fun PersonalBmAppShell(
                                             uiState = uiState,
                                             onMonthChange = { viewModel.setSelectedMonthKey(it) },
                                             onSelectDate = { viewModel.setSelectedCalendarDay(it) },
+                                            onAddTransactionOnDate = { dateEpochDay ->
+                                                editingTransaction = null
+                                                modalDefaultType = "EXPENSE"
+                                                modalDefaultDateEpochDay = dateEpochDay
+                                                showTransactionModal = true
+                                            },
                                             onEditTransaction = { tx ->
                                                 editingTransaction = tx
+                                                modalDefaultDateEpochDay = null
                                                 showTransactionModal = true
                                             },
                                             onDuplicateTransaction = { tx -> viewModel.duplicateTransaction(tx) },
@@ -661,9 +841,35 @@ fun PersonalBmAppShell(
                                         NavSection.REPORTS -> ReportsAndExportsScreen(uiState = uiState)
                                         NavSection.SETTINGS -> SettingsScreen(
                                             uiState = uiState,
+                                            isCloudSignedIn = isCloudSignedIn,
                                             onUpdateSettings = { viewModel.updateSettings(it) },
+                                            onUpdateUserProfile = { updatedSettings, newPhotoUrl, isCustomPhoto ->
+                                                viewModel.updateUserProfile(updatedSettings, newPhotoUrl, isCustomPhoto)
+                                            },
+                                            onSyncToCloud = {
+                                                viewModel.syncWithFirebaseCloud()
+                                            },
                                             onSignOutClick = {
-                                                signOut(credentialManager = credentialManager, scope = scope)
+                                                if (isCloudSignedIn) {
+                                                    signOut(
+                                                        credentialManager = credentialManager,
+                                                        scope = scope,
+                                                        onSignOutComplete = { onAuthStateUpdated() }
+                                                    )
+                                                } else {
+                                                    onGoogleSignInClicked(
+                                                        context = context,
+                                                        credentialManager = credentialManager,
+                                                        onAuthSuccess = {
+                                                            onAuthStateUpdated()
+                                                        },
+                                                        onAuthError = {
+                                                            showGoogleSignInSheet = true
+                                                        },
+                                                        scope = scope,
+                                                        onAuthCancelled = {}
+                                                    )
+                                                }
                                             }
                                         )
                                     }
@@ -684,14 +890,15 @@ fun PersonalBmAppShell(
 @Composable
 private fun MobileGreetingHeader(
     displayName: String,
-    themeMode: String,
+    photoUrl: String,
+    isCloudSignedIn: Boolean = false,
+    isDarkTheme: Boolean,
     activeAlertsCount: Int,
     onNotificationsClick: () -> Unit,
     onToggleTheme: () -> Unit,
     onProfileClick: () -> Unit
 ) {
-    val firstName = displayName.trim().split(" ").firstOrNull()?.ifBlank { "there" } ?: "there"
-    val initials = displayName.trim().take(2).uppercase().ifBlank { "BM" }
+    val firstName = displayName.trim().split(" ").firstOrNull()?.ifBlank { "Guest" } ?: "Guest"
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -704,7 +911,10 @@ private fun MobileGreetingHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 Surface(
                     color = RoyalBlue,
                     shape = RoundedCornerShape(10.dp),
@@ -720,15 +930,16 @@ private fun MobileGreetingHeader(
                     }
                 }
                 Spacer(modifier = Modifier.width(10.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Personal BM",
+                        text = if (isCloudSignedIn) "Cloud Synced" else "Guest Mode",
                         style = MaterialTheme.typography.labelSmall,
-                        color = RoyalBlue,
-                        fontWeight = FontWeight.SemiBold
+                        color = if (isCloudSignedIn) EmeraldSuccess else RoyalBlue,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                     Text(
-                        text = "Hello, $firstName",
+                        text = "Hi, $firstName",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -746,7 +957,7 @@ private fun MobileGreetingHeader(
                     modifier = Modifier.testTag("mobile_theme_toggle")
                 ) {
                     Icon(
-                        imageVector = if (themeMode == "dark") Icons.Default.LightMode else Icons.Default.DarkMode,
+                        imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = "Toggle theme",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
@@ -773,24 +984,17 @@ private fun MobileGreetingHeader(
                         )
                     }
                 }
-                Surface(
-                    color = RoyalBlueSoft,
-                    shape = CircleShape,
-                    border = BorderStroke(1.dp, RoyalBlue.copy(alpha = 0.3f)),
+                Box(
                     modifier = Modifier
-                        .size(34.dp)
                         .clip(CircleShape)
                         .clickable { onProfileClick() }
                         .testTag("mobile_profile_avatar")
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = initials,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = RoyalBlue,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    UserAvatarBadge(
+                        displayName = displayName,
+                        photoUrl = photoUrl,
+                        size = 34.dp
+                    )
                 }
             }
         }
@@ -804,6 +1008,7 @@ private fun MobileGreetingHeader(
 @Composable
 private fun DesktopTopNavBar(
     uiState: PersonalBmUiState,
+    isDarkTheme: Boolean,
     activeAlertsCount: Int,
     onSearchQueryChange: (String) -> Unit,
     onMonthChange: (String) -> Unit,
@@ -916,7 +1121,7 @@ private fun DesktopTopNavBar(
                 // Theme Toggle
                 IconButton(onClick = onToggleTheme) {
                     Icon(
-                        imageVector = if (uiState.settings.themeMode == "dark") Icons.Default.LightMode else Icons.Default.DarkMode,
+                        imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = "Toggle theme",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -954,20 +1159,11 @@ private fun DesktopTopNavBar(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            color = RoyalBlue,
-                            shape = CircleShape,
-                            modifier = Modifier.size(26.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = initials,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
+                        UserAvatarBadge(
+                            displayName = displayName,
+                            photoUrl = uiState.photoUrl,
+                            size = 26.dp
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = displayName.split(" ").firstOrNull() ?: "Profile",
@@ -993,7 +1189,11 @@ private fun MinimalLightSidebar(
     onToggleCollapse: () -> Unit,
     onSelect: (NavSection) -> Unit
 ) {
-    val sidebarWidth = if (collapsed) 74.dp else 236.dp
+    val sidebarWidth by animateDpAsState(
+        targetValue = if (collapsed) 74.dp else 236.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "sidebar_width_anim"
+    )
 
     Column(
         modifier = Modifier
@@ -1238,3 +1438,302 @@ private fun NotificationsAndAlertsSheet(
         }
     }
 }
+
+/**
+ * Interactive Account & Profile Modal Sheet opened directly from the Profile Icon in the top bar.
+ * Lets a Guest user log into their Personal Google Account & save their data to Firebase Cloud,
+ * or lets a signed-in user update their Google Profile Photo / Display Name and trigger Cloud Sync.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileAndCloudAccountSheet(
+    uiState: PersonalBmUiState,
+    isCloudSignedIn: Boolean,
+    onDismiss: () -> Unit,
+    onGoogleLoginClick: () -> Unit,
+    onSyncToCloud: () -> Unit,
+    onSignOutToGuest: () -> Unit,
+    onUpdateUserProfile: (com.example.data.model.UserSettings, String, Boolean) -> Unit,
+    onOpenFullSettings: () -> Unit
+) {
+    val current = uiState.settings
+    val googleUser = remember(isCloudSignedIn) {
+        try { Firebase.auth.currentUser } catch (_: Exception) { null }
+    }
+    val googlePhotoUrl = remember(googleUser) {
+        googleUser?.photoUrl?.toString() ?: ""
+    }
+
+    var displayName by remember(current.displayName) { mutableStateOf(current.displayName.ifBlank { "Guest" }) }
+    var photoUrl by remember(uiState.photoUrl, googlePhotoUrl) {
+        mutableStateOf(uiState.photoUrl.ifBlank { googlePhotoUrl })
+    }
+    var isCustomPhoto by remember { mutableStateOf(false) }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            photoUrl = uri.toString()
+            isCustomPhoto = true
+            onUpdateUserProfile(
+                current.copy(displayName = displayName.trim().ifBlank { "Guest" }.take(120)),
+                photoUrl,
+                true
+            )
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                UserAvatarBadge(
+                    displayName = displayName.ifBlank { "Guest" },
+                    photoUrl = photoUrl,
+                    size = 64.dp
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = displayName.ifBlank { "Guest" },
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isCloudSignedIn) {
+                            current.email.ifBlank { googleUser?.email ?: "Personal Google Account" }
+                        } else {
+                            "Guest Account • Local Device Storage"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = if (isCloudSignedIn) EmeraldSuccess.copy(alpha = 0.14f) else RoyalBlue.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(999.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isCloudSignedIn) Icons.Default.CloudDone else Icons.Default.Backup,
+                                contentDescription = null,
+                                tint = if (isCloudSignedIn) EmeraldSuccess else RoyalBlue,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isCloudSignedIn) "Cloud Sync Active (Firebase)" else "Logged in as Guest",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isCloudSignedIn) EmeraldSuccess else RoyalBlue,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Primary Action Card: Login with Google & Save to Cloud OR Sync / Sign Out
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (!isCloudSignedIn) {
+                        Text(
+                            text = "Cloud Backup",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Sign in with Google to sync your profile & records to Firebase Cloud.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = onGoogleLoginClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("profile_sheet_google_login_button")
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sign in with Google", fontWeight = FontWeight.SemiBold)
+                        }
+                    } else {
+                        Text(
+                            text = "Google Cloud Connected",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Button(
+                            onClick = onSyncToCloud,
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("profile_sheet_sync_cloud_button")
+                        ) {
+                            Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sync to Cloud Now")
+                        }
+                        OutlinedButton(
+                            onClick = onSignOutToGuest,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("profile_sheet_sign_out_guest_button")
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = null,
+                                tint = CrimsonDanger,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Switch to Guest Mode", color = CrimsonDanger)
+                        }
+                    }
+                }
+            }
+
+            // Quick Profile Editor (Update Name & Avatar Photo)
+            Text(
+                text = "Customize Profile Name & Photo",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        photoPicker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.AddAPhoto, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Change Photo")
+                }
+                if (googlePhotoUrl.isNotBlank() && photoUrl != googlePhotoUrl) {
+                    TextButton(
+                        onClick = {
+                            photoUrl = googlePhotoUrl
+                            isCustomPhoto = false
+                            onUpdateUserProfile(
+                                current.copy(displayName = displayName.trim().ifBlank { googleUser?.displayName ?: "User" }),
+                                googlePhotoUrl,
+                                false
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Use Google Photo")
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = displayName,
+                onValueChange = { displayName = it },
+                label = { Text("Display Name") },
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("profile_sheet_name_input")
+            )
+
+            Button(
+                onClick = {
+                    onUpdateUserProfile(
+                        current.copy(displayName = displayName.trim().ifBlank { "Guest" }.take(120)),
+                        photoUrl.trim(),
+                        isCustomPhoto
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Save Profile Name & Photo")
+            }
+
+            // Quick Theme Switcher (White Default vs Dark & Orange)
+            Text(
+                text = "Theme Appearance",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "light" to "Light (White)",
+                    "dark" to "Dark & Orange",
+                    "system" to "System Auto"
+                ).forEach { (modeKey, modeLabel) ->
+                    FilterChip(
+                        selected = current.themeMode == modeKey,
+                        onClick = {
+                            onUpdateUserProfile(
+                                current.copy(themeMode = modeKey),
+                                photoUrl.trim(),
+                                isCustomPhoto
+                            )
+                        },
+                        label = { Text(modeLabel) }
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+            OutlinedButton(
+                onClick = onOpenFullSettings,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Open Full Settings & Preferences")
+            }
+        }
+    }
+}
+

@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -7,51 +8,54 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF3B82F6),
+    primary = DarkOrangePrimary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF1E3A8A),
-    onPrimaryContainer = Color(0xFFDBEAFE),
-    secondary = Color(0xFF38BDF8),
+    primaryContainer = DarkOrangeSoft,
+    onPrimaryContainer = Color(0xFFFFDBC2),
+    secondary = DarkOrangeBright,
     onSecondary = ObsidianDark,
-    secondaryContainer = Color(0xFF0C4A6E),
-    onSecondaryContainer = Color(0xFFE0F2FE),
-    tertiary = Color(0xFF10B981),
+    secondaryContainer = Color(0xFF2E1909),
+    onSecondaryContainer = Color(0xFFFFEDD5),
+    tertiary = Color(0xFFF59E0B),
     onTertiary = ObsidianDark,
-    tertiaryContainer = Color(0xFF064E3B),
-    onTertiaryContainer = Color(0xFFD1FAE5),
+    tertiaryContainer = Color(0xFF452205),
+    onTertiaryContainer = Color(0xFFFEF3C7),
     error = Color(0xFFF43F5E),
     onError = Color.White,
     errorContainer = Color(0xFF881337),
     onErrorContainer = Color(0xFFFFE4E6),
     background = ObsidianDark,
-    onBackground = Color(0xFFF8FAFC),
+    onBackground = Color(0xFFFAF8F5),
     surface = DeepNavy,
-    onSurface = Color(0xFFF8FAFC),
+    onSurface = Color(0xFFFAF8F5),
     surfaceVariant = SlateSurfaceDark,
-    onSurfaceVariant = Color(0xFF94A3B8),
+    onSurfaceVariant = Color(0xFFD6C7BC),
     outline = SlateBorderDark
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = RoyalBlue,
+    primary = LightRoyalBlue,
     onPrimary = Color.White,
-    primaryContainer = RoyalBlueSoft,
-    onPrimaryContainer = RoyalBlueDark,
+    primaryContainer = LightRoyalBlueSoft,
+    onPrimaryContainer = LightRoyalBlueDark,
     secondary = SlateTextPrimary,
     onSecondary = Color.White,
     secondaryContainer = LightSurfaceVariant,
     onSecondaryContainer = SlateTextPrimary,
     tertiary = EmeraldSuccess,
     onTertiary = Color.White,
-    tertiaryContainer = EmeraldSoft,
+    tertiaryContainer = Color(0xFFECFDF5),
     onTertiaryContainer = EmeraldSuccess,
     error = CrimsonDanger,
     onError = Color.White,
-    errorContainer = CrimsonSoft,
+    errorContainer = Color(0xFFFFF1F2),
     onErrorContainer = CrimsonDanger,
     background = LightBackground,
     onBackground = SlateTextPrimary,
@@ -71,16 +75,34 @@ val AppShapes = Shapes(
 )
 
 @Composable
-fun PersonalBMTheme(
+fun isEffectiveDarkTheme(themeMode: String = "light"): Boolean {
+    val systemDark = isSystemInDarkTheme()
+    return when (themeMode.lowercase()) {
+        "dark" -> true
+        "system" -> systemDark
+        else -> false // Default is white/light Minimal Light Fintech theme
+    }
+}
+
+@Composable
+fun AppTheme(
     themeMode: String = "light",
+    darkTheme: Boolean = isEffectiveDarkTheme(themeMode),
     content: @Composable () -> Unit
 ) {
-    val darkTheme = when (themeMode) {
-        "dark" -> true
-        "system" -> isSystemInDarkTheme()
-        else -> false // Default is Minimal Light Fintech
-    }
+    ActiveThemeState.isDark = darkTheme
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -89,3 +111,15 @@ fun PersonalBMTheme(
         content = content
     )
 }
+
+@Composable
+fun PersonalBMTheme(
+    themeMode: String = "light",
+    content: @Composable () -> Unit
+) {
+    AppTheme(
+        themeMode = themeMode,
+        content = content
+    )
+}
+

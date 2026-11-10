@@ -6,8 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.Account
 import com.example.data.model.Budget
 import com.example.data.model.Category
+import com.example.data.model.DefaultSeedData
 import com.example.data.model.DhakaDateUtils
+import com.example.data.model.EventBreakdownItem
+import com.example.data.model.EventBreakdownUtils
 import com.example.data.model.FinTransaction
+import com.example.data.model.LifeEventType
 import com.example.data.model.LoanPayment
 import com.example.data.model.LoanRecord
 import com.example.data.model.NavSection
@@ -21,7 +25,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -44,6 +47,7 @@ data class PersonalBmUiState(
     val isSubmitting: Boolean = false,
     val currentSection: NavSection = NavSection.OVERVIEW,
     val settings: UserSettings = UserSettings(),
+    val photoUrl: String = "",
     val accounts: List<Account> = emptyList(),
     val categories: List<Category> = emptyList(),
     val transactions: List<FinTransaction> = emptyList(),
@@ -66,17 +70,17 @@ class PersonalBmViewModel(
     private val repository: PersonalBmRepository,
     private val currentUserId: String,
     private val initialDisplayName: String = "",
-    private val initialEmail: String = ""
+    private val initialEmail: String = "",
+    private val initialPhotoUrl: String = ""
 ) : ViewModel() {
 
-    private val _localState = MutableStateFlow(PersonalBmUiState())
+    private val _localState = MutableStateFlow(PersonalBmUiState(photoUrl = initialPhotoUrl))
     private var recurringCheckCompleted = false
 
     init {
-        // Seed initial BDT accounts (bKash, Nagad, Rocket, Upay, Cash, Bank) and categories on first login
         viewModelScope.launch {
             try {
-                repository.ensureDefaultsSeeded(initialDisplayName, initialEmail)
+                repository.ensureDefaultsSeeded(initialDisplayName, initialEmail, initialPhotoUrl)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to seed defaults: ${e.message}")
             }
@@ -90,14 +94,21 @@ class PersonalBmViewModel(
         repository.observeTransactions(currentUserId).catch { emit(emptyList()) },
         repository.observeBudgets(currentUserId).catch { emit(emptyList()) }
     ) { settings, accounts, categories, transactions, budgets ->
+        val nonEmptyAccounts = accounts.ifEmpty {
+            DefaultSeedData.defaultAccounts(currentUserId).map { it.second }
+        }
+        val nonEmptyCategories = categories.ifEmpty {
+            DefaultSeedData.defaultCategories(currentUserId).map { it.second }
+        }
         CoreDataBundle(
             settings = settings ?: UserSettings(
                 userId = currentUserId,
-                displayName = initialDisplayName,
-                email = initialEmail
+                displayName = initialDisplayName.ifBlank { "Personal BM User" },
+                email = initialEmail,
+                themeMode = "light"
             ),
-            accounts = accounts,
-            categories = categories,
+            accounts = nonEmptyAccounts,
+            categories = nonEmptyCategories,
             transactions = transactions,
             budgets = budgets
         )
@@ -122,9 +133,9 @@ class PersonalBmViewModel(
     val uiState: StateFlow<PersonalBmUiState> = combine(
         coreDataFlow,
         planningDataFlow,
+        repository.observePhotoUrl(currentUserId).catch { emit(initialPhotoUrl) },
         _localState
-    ) { core, planning, local ->
-        // Trigger one-time idempotent recurring auto-post check once recurring rules arrive
+    ) { core, planning, photoUrl, local ->
         if (!recurringCheckCompleted && planning.recurring.isNotEmpty()) {
             recurringCheckCompleted = true
             triggerRecurringAutoPost(planning.recurring)
@@ -132,6 +143,7 @@ class PersonalBmViewModel(
         local.copy(
             isLoading = false,
             settings = core.settings,
+            photoUrl = photoUrl.ifBlank { initialPhotoUrl },
             accounts = core.accounts,
             categories = core.categories,
             transactions = core.transactions,
@@ -153,7 +165,12 @@ class PersonalBmViewModel(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000L),
-        initialValue = PersonalBmUiState(isLoading = true)
+        initialValue = PersonalBmUiState(
+            isLoading = false,
+            photoUrl = initialPhotoUrl,
+            accounts = DefaultSeedData.defaultAccounts(currentUserId).map { it.second },
+            categories = DefaultSeedData.defaultCategories(currentUserId).map { it.second }
+        )
     )
 
     private fun triggerRecurringAutoPost(rules: List<RecurringTransaction>) {
@@ -207,16 +224,11 @@ class PersonalBmViewModel(
         _localState.update { it.copy(snackbarMessage = message) }
     }
 
-    private fun showError(message: String) {
-        _localState.update { it.copy(errorMessage = message) }
-    }
-
     // ========================================================================
-    // CRUD OPERATIONS WITH DUPLICATE SUBMISSION GUARD
+    // CRUD OPERATIONS
     // ========================================================================
 
     private fun runMutation(successMsg: String, block: suspend () -> Unit) {
-        if (_localState.value.isSubmitting) return
         _localState.update { it.copy(isSubmitting = true, errorMessage = null) }
         viewModelScope.launch {
             try {
@@ -233,6 +245,148 @@ class PersonalBmViewModel(
                     )
                 }
             }
+        }
+    }
+
+    // Quick Dashboard Actions (Allowance, Expense Where & How Much, Savings)
+    fun addQuickAllowanceOrIncome(
+        amountPaisa: Long,
+        title: String,
+        accountId: String,
+        accountName: String,
+        alsoSetMonthlyBudget: Boolean,
+        dateEpochDay: Long = DhakaDateUtils.todayEpochDay(),
+        timeFormatted: String = DhakaDateUtils.currentTimeFormatted()
+    ) {
+        runMutation("Monthly allowance / income added to $accountName") {
+            val tx = FinTransaction(
+                title = title.trim().ifBlank { "Monthly Allowance" }.take(160),
+                amountPaisa = amountPaisa,
+                type = "INCOME",
+                categoryId = "cat_inc_allowance",
+                categoryName = "Monthly Allowance",
+                accountId = accountId.ifBlank { "acc_cash" },
+                accountName = accountName.ifBlank { "Cash" },
+                toAccountId = "",
+                toAccountName = "",
+                dateEpochDay = dateEpochDay,
+                timeFormatted = timeFormatted,
+                timestampMillis = System.currentTimeMillis(),
+                paymentMethod = accountName.ifBlank { "Cash" },
+                notes = "Recorded via Quick Allowance Entry"
+            )
+            repository.addTransaction(tx)
+            if (alsoSetMonthlyBudget) {
+                val monthKey = DhakaDateUtils.epochDayToMonthKey(dateEpochDay)
+                repository.saveBudget(
+                    Budget(
+                        monthKey = monthKey,
+                        categoryId = "ALL",
+                        categoryName = "Overall Monthly Budget",
+                        limitPaisa = amountPaisa
+                    )
+                )
+            }
+        }
+    }
+
+    fun addQuickExpense(
+        whereTitle: String,
+        amountPaisa: Long,
+        categoryId: String,
+        categoryName: String,
+        accountId: String,
+        accountName: String,
+        notes: String = "",
+        dateEpochDay: Long = DhakaDateUtils.todayEpochDay(),
+        timeFormatted: String = DhakaDateUtils.currentTimeFormatted()
+    ) {
+        runMutation("Expense recorded at ${whereTitle.ifBlank { categoryName }}") {
+            val tx = FinTransaction(
+                title = whereTitle.trim().ifBlank { categoryName.ifBlank { "Expense" } }.take(160),
+                amountPaisa = amountPaisa,
+                type = "EXPENSE",
+                categoryId = categoryId.ifBlank { "cat_exp_food" },
+                categoryName = categoryName.ifBlank { "Food & Dining" },
+                accountId = accountId.ifBlank { "acc_cash" },
+                accountName = accountName.ifBlank { "Cash" },
+                toAccountId = "",
+                toAccountName = "",
+                dateEpochDay = dateEpochDay,
+                timeFormatted = timeFormatted,
+                timestampMillis = System.currentTimeMillis(),
+                paymentMethod = accountName.ifBlank { "Cash" },
+                notes = notes.trim().take(1000)
+            )
+            repository.addTransaction(tx)
+        }
+    }
+
+    fun addQuickSavings(
+        goalName: String,
+        amountPaisa: Long,
+        targetAmountPaisa: Long,
+        sourceAccountId: String,
+        sourceAccountName: String,
+        notes: String = ""
+    ) {
+        runMutation("Saved to ${goalName.ifBlank { "Monthly Savings" }}") {
+            repository.allocateQuickSavings(
+                goalName = goalName,
+                amountPaisa = amountPaisa,
+                targetAmountPaisa = targetAmountPaisa,
+                sourceAccountId = sourceAccountId,
+                sourceAccountName = sourceAccountName,
+                notes = notes
+            )
+        }
+    }
+
+    fun addEventExpenseWithBreakdown(
+        eventType: LifeEventType,
+        eventName: String,
+        items: List<EventBreakdownItem>,
+        accountId: String = "acc_cash",
+        accountName: String = "Cash",
+        extraNotes: String = "",
+        dateEpochDay: Long = DhakaDateUtils.todayEpochDay(),
+        timeFormatted: String = DhakaDateUtils.currentTimeFormatted()
+    ) {
+        val validItems = items.filter { it.reason.isNotBlank() && it.amountPaisa > 0L }
+        val totalPaisa = validItems.sumOf { it.amountPaisa }
+        if (totalPaisa <= 0L) {
+            _localState.update { it.copy(errorMessage = "Please enter at least one valid cost & reason.") }
+            return
+        }
+        val cleanEventName = eventName.trim().ifBlank { eventType.label }
+        val targetAccId = accountId.ifBlank { "acc_cash" }
+        val targetAccName = accountName.ifBlank { "Cash" }
+        val encodedNotes = EventBreakdownUtils.encodeEventNotes(
+            eventType = eventType,
+            eventName = cleanEventName,
+            items = validItems,
+            extraNotes = extraNotes
+        )
+        val ruleKey = EventBreakdownUtils.buildEventRuleKey(eventType, cleanEventName)
+        runMutation("Event \"$cleanEventName\" (${validItems.size} cost items) deducted from $targetAccName") {
+            val tx = FinTransaction(
+                title = "${eventType.label}: $cleanEventName".take(160),
+                amountPaisa = totalPaisa,
+                type = "EXPENSE",
+                categoryId = eventType.categoryId,
+                categoryName = "Event: ${eventType.label}",
+                accountId = targetAccId,
+                accountName = targetAccName,
+                toAccountId = "",
+                toAccountName = "",
+                dateEpochDay = dateEpochDay,
+                timeFormatted = timeFormatted,
+                timestampMillis = System.currentTimeMillis(),
+                paymentMethod = targetAccName,
+                notes = encodedNotes,
+                recurringRuleId = ruleKey
+            )
+            repository.addTransaction(tx)
         }
     }
 
@@ -402,10 +556,26 @@ class PersonalBmViewModel(
         }
     }
 
-    // Settings
+    // Settings & Profile
     fun updateSettings(updated: UserSettings) {
-        runMutation("Settings saved") {
+        runMutation("Preferences updated") {
             repository.updateSettings(updated)
+        }
+    }
+
+    fun updateUserProfile(
+        updated: UserSettings,
+        newPhotoUrl: String,
+        isCustomPhoto: Boolean = true
+    ) {
+        runMutation("Profile & preferences saved") {
+            repository.updateUserProfile(updated, newPhotoUrl, isCustomPhoto)
+        }
+    }
+
+    fun syncWithFirebaseCloud() {
+        runMutation("All records synced with Firebase Cloud") {
+            repository.syncLocalAndCloudForGoogleUser()
         }
     }
 

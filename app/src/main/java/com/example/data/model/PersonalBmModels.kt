@@ -31,7 +31,7 @@ data class UserSettings(
     val currencySymbol: String = "৳",
     val timezone: String = "Asia/Dhaka",
     val language: String = "en", // "en" or "bn"
-    val themeMode: String = "light", // "light" (default Minimal Light), "dark", "system"
+    val themeMode: String = "light", // "light" (default white theme), "dark", "system"
     val defaultAccountId: String = "acc_cash",
     val weekStartDay: String = "SATURDAY", // "SATURDAY", "SUNDAY", "MONDAY"
     val seededDefaults: Boolean = false,
@@ -194,6 +194,7 @@ data class LoanPayment(
 
 enum class NavSection(val route: String, val labelEn: String, val labelBn: String) {
     OVERVIEW("overview", "Overview", "সারসংক্ষেপ"),
+    EVENTS("events", "Life Events", "জীবনের ইভেন্ট"),
     TRANSACTIONS("transactions", "Transactions", "লেনদেনসমূহ"),
     INCOME("income", "Income", "আয় ব্যবস্থাপনা"),
     EXPENSES("expenses", "Expenses", "ব্যয় ব্যবস্থাপনা"),
@@ -208,6 +209,282 @@ enum class NavSection(val route: String, val labelEn: String, val labelBn: Strin
     SETTINGS("settings", "Settings", "সেটিংস");
 
     fun label(lang: String): String = if (lang == "bn") labelBn else labelEn
+}
+
+// ============================================================================
+// LIFE EVENTS & ITEMIZED COST + REASON BREAKDOWN SYSTEM
+// ============================================================================
+
+enum class LifeEventType(
+    val id: String,
+    val label: String,
+    val shortLabel: String,
+    val labelBn: String,
+    val categoryId: String,
+    val iconName: String,
+    val colorHex: String,
+    val presetReasons: List<String>
+) {
+    TOUR(
+        id = "TOUR",
+        label = "Tour & Travel",
+        shortLabel = "Tour",
+        labelBn = "ট্যুর ও ভ্রমণ",
+        categoryId = "cat_event_tour",
+        iconName = "flight",
+        colorHex = "#0EA5E9",
+        presetReasons = listOf("Ticket", "Hotel", "Food", "Local Transport", "Entry Fee", "Shopping")
+    ),
+    PICNIC(
+        id = "PICNIC",
+        label = "Picnic & Outing",
+        shortLabel = "Picnic",
+        labelBn = "পিকনিক",
+        categoryId = "cat_event_picnic",
+        iconName = "park",
+        colorHex = "#10B981",
+        presetReasons = listOf("Contribution", "Bus Rent", "Food & BBQ", "Spot Ticket", "Activities", "Snacks")
+    ),
+    WEDDING(
+        id = "WEDDING",
+        label = "Wedding",
+        shortLabel = "Wedding",
+        labelBn = "বিয়ে",
+        categoryId = "cat_event_wedding",
+        iconName = "celebration",
+        colorHex = "#EC4899",
+        presetReasons = listOf("Gift / Salami", "Outfit", "Holud / Mehedi", "Transport", "Makeover", "Group Gift")
+    ),
+    FESTIVAL(
+        id = "FESTIVAL",
+        label = "Festival / Eid",
+        shortLabel = "Festival",
+        labelBn = "উৎসব / ঈদ",
+        categoryId = "cat_event_festival",
+        iconName = "redeem",
+        colorHex = "#F59E0B",
+        presetReasons = listOf("Salami", "Clothes", "Feast Share", "Sweets & Food", "Travel", "Charity")
+    ),
+    BIRTHDAY(
+        id = "BIRTHDAY",
+        label = "Birthday",
+        shortLabel = "Birthday",
+        labelBn = "জন্মদিন",
+        categoryId = "cat_event_birthday",
+        iconName = "cake",
+        colorHex = "#8B5CF6",
+        presetReasons = listOf("Cake", "Gift", "Restaurant Treat", "Decorations", "Photos")
+    ),
+    GATHERING(
+        id = "GATHERING",
+        label = "Family Dawat",
+        shortLabel = "Dawat",
+        labelBn = "দাওয়াত",
+        categoryId = "cat_event_gathering",
+        iconName = "restaurant",
+        colorHex = "#F97316",
+        presetReasons = listOf("Groceries & Meat", "Sweets", "Dinner Items", "Transport", "Host Gift")
+    ),
+    MEDICAL_EVENT(
+        id = "MEDICAL_EVENT",
+        label = "Medical Visit",
+        shortLabel = "Medical",
+        labelBn = "চিকিৎসা",
+        categoryId = "cat_event_medical",
+        iconName = "medical_services",
+        colorHex = "#E11D48",
+        presetReasons = listOf("Doctor Fee", "Lab Tests", "Medicines", "Hospital Charge", "Transport")
+    ),
+    HOME_EVENT(
+        id = "HOME_EVENT",
+        label = "Home / Shifting",
+        shortLabel = "Home",
+        labelBn = "বাসা বদল",
+        categoryId = "cat_event_home",
+        iconName = "home",
+        colorHex = "#6366F1",
+        presetReasons = listOf("Truck Rent", "Labor Charge", "Repairs", "Cleaning", "Essentials")
+    ),
+    OTHER_EVENT(
+        id = "OTHER_EVENT",
+        label = "Other Event",
+        shortLabel = "Other",
+        labelBn = "অন্যান্য",
+        categoryId = "cat_event_other",
+        iconName = "event",
+        colorHex = "#14B8A6",
+        presetReasons = listOf("Registration", "Food", "Transport", "Gift", "Misc")
+    );
+
+    companion object {
+        fun fromIdOrCategory(value: String): LifeEventType {
+            val clean = value.trim().uppercase()
+            return entries.firstOrNull {
+                it.id == clean || it.categoryId.equals(value.trim(), ignoreCase = true)
+            } ?: OTHER_EVENT
+        }
+    }
+}
+
+data class EventBreakdownItem(
+    val reason: String,
+    val amountPaisa: Long
+)
+
+data class ParsedEventTransaction(
+    val eventType: LifeEventType,
+    val eventName: String,
+    val items: List<EventBreakdownItem>,
+    val extraNotes: String = ""
+)
+
+data class ParticipatedLifeEvent(
+    val eventKey: String,
+    val eventType: LifeEventType,
+    val eventName: String,
+    val totalAmountPaisa: Long,
+    val dateEpochDay: Long,
+    val timeFormatted: String,
+    val accountId: String,
+    val accountName: String,
+    val breakdownItems: List<EventBreakdownItem>,
+    val transactions: List<FinTransaction>
+)
+
+object EventBreakdownUtils {
+    private const val HEADER_PREFIX = "[EVENT|"
+
+    fun buildEventRuleKey(eventType: LifeEventType, eventName: String): String {
+        val slug = eventName.trim().lowercase(Locale.US)
+            .replace(Regex("[^a-z0-9]+"), "_")
+            .trim('_')
+            .take(40)
+            .ifBlank { "event" }
+        return "evt_${eventType.id.lowercase(Locale.US)}_$slug"
+    }
+
+    /**
+     * Encodes an Event Type, Event Name, and every single (Reason, Cost) item into FinTransaction.notes
+     * so it is human-readable, 100% Firestore-rules compliant, and lossless.
+     */
+    fun encodeEventNotes(
+        eventType: LifeEventType,
+        eventName: String,
+        items: List<EventBreakdownItem>,
+        extraNotes: String = ""
+    ): String {
+        val safeType = eventType.id
+        val safeName = eventName.replace("|", "-").replace("]", "").trim().ifBlank { eventType.label }
+        val encodedPairs = items
+            .filter { it.amountPaisa > 0L && it.reason.isNotBlank() }
+            .joinToString(";;") { item ->
+                val cleanReason = item.reason.replace(";;", ",").replace("::", "-").replace("|", "-").replace("]", "").trim()
+                "$cleanReason::${item.amountPaisa}"
+            }
+        val sb = StringBuilder()
+        sb.append("$HEADER_PREFIX$safeType|$safeName|$encodedPairs]")
+        items.filter { it.amountPaisa > 0L && it.reason.isNotBlank() }.forEach { item ->
+            sb.append("\n• ${item.reason.trim()}: ${MoneyUtils.formatPaisa(item.amountPaisa)}")
+        }
+        if (extraNotes.isNotBlank()) {
+            sb.append("\nNote: ${extraNotes.trim()}")
+        }
+        return sb.toString().take(980)
+    }
+
+    fun isEventTransaction(tx: FinTransaction): Boolean {
+        return tx.notes.startsWith(HEADER_PREFIX) ||
+            tx.categoryId.startsWith("cat_event_") ||
+            tx.recurringRuleId.startsWith("evt_")
+    }
+
+    fun parseEventTransaction(tx: FinTransaction): ParsedEventTransaction? {
+        if (!isEventTransaction(tx)) return null
+        val notes = tx.notes
+        if (notes.startsWith(HEADER_PREFIX)) {
+            val closeIdx = notes.indexOf(']')
+            if (closeIdx > HEADER_PREFIX.length) {
+                val headerContent = notes.substring(HEADER_PREFIX.length, closeIdx)
+                val parts = headerContent.split("|")
+                val type = LifeEventType.fromIdOrCategory(parts.getOrNull(0) ?: "")
+                val name = parts.getOrNull(1)?.ifBlank { tx.title } ?: tx.title
+                val rawItems = parts.getOrNull(2).orEmpty()
+                val parsedItems = rawItems.split(";;").mapNotNull { token ->
+                    val kv = token.split("::")
+                    if (kv.size == 2) {
+                        val r = kv[0].trim()
+                        val amt = kv[1].trim().toLongOrNull() ?: 0L
+                        if (r.isNotBlank() && amt > 0L) EventBreakdownItem(r, amt) else null
+                    } else null
+                }.ifEmpty {
+                    listOf(EventBreakdownItem(reason = tx.title.ifBlank { "Event Cost" }, amountPaisa = tx.amountPaisa))
+                }
+                return ParsedEventTransaction(
+                    eventType = type,
+                    eventName = name,
+                    items = parsedItems
+                )
+            }
+        }
+        val fallbackType = LifeEventType.fromIdOrCategory(tx.categoryId)
+        val cleanName = tx.title.removePrefix("${fallbackType.label}:").trim().ifBlank { fallbackType.label }
+        return ParsedEventTransaction(
+            eventType = fallbackType,
+            eventName = cleanName,
+            items = listOf(
+                EventBreakdownItem(
+                    reason = tx.notes.lineSequence().firstOrNull()?.takeIf { it.isNotBlank() } ?: cleanName,
+                    amountPaisa = tx.amountPaisa
+                )
+            )
+        )
+    }
+
+    /**
+     * Aggregates all Event transactions into ParticipatedLifeEvent records with full itemized cost & reason breakdowns.
+     */
+    fun aggregateParticipatedEvents(transactions: List<FinTransaction>): List<ParticipatedLifeEvent> {
+        val eventTxs = transactions.filter { it.type == "EXPENSE" && isEventTransaction(it) }
+        if (eventTxs.isEmpty()) return emptyList()
+
+        val grouped = eventTxs.groupBy { tx ->
+            val parsed = parseEventTransaction(tx)
+            if (tx.recurringRuleId.startsWith("evt_")) {
+                tx.recurringRuleId
+            } else if (parsed != null) {
+                buildEventRuleKey(parsed.eventType, parsed.eventName)
+            } else {
+                "evt_${tx.id}"
+            }
+        }
+
+        return grouped.map { (key, txs) ->
+            val sortedTxs = txs.sortedWith(
+                compareByDescending<FinTransaction> { it.dateEpochDay }
+                    .thenByDescending { it.timestampMillis }
+            )
+            val latest = sortedTxs.first()
+            val firstParsed = parseEventTransaction(latest)
+            val eventType = firstParsed?.eventType ?: LifeEventType.fromIdOrCategory(latest.categoryId)
+            val eventName = firstParsed?.eventName ?: latest.title
+            val allItems = sortedTxs.flatMap { tx ->
+                parseEventTransaction(tx)?.items
+                    ?: listOf(EventBreakdownItem(tx.title, tx.amountPaisa))
+            }
+            ParticipatedLifeEvent(
+                eventKey = key,
+                eventType = eventType,
+                eventName = eventName,
+                totalAmountPaisa = sortedTxs.sumOf { it.amountPaisa },
+                dateEpochDay = latest.dateEpochDay,
+                timeFormatted = latest.timeFormatted,
+                accountId = latest.accountId,
+                accountName = latest.accountName,
+                breakdownItems = allItems,
+                transactions = sortedTxs
+            )
+        }.sortedByDescending { it.dateEpochDay }
+    }
 }
 
 // ============================================================================
@@ -304,6 +581,35 @@ object DhakaDateUtils {
         return fmt.format(Date())
     }
 
+    fun currentTimeWithSecondsFormatted(): String {
+        val fmt = SimpleDateFormat("hh:mm:ss a", Locale.US)
+        fmt.timeZone = dhakaTimeZone
+        return fmt.format(Date())
+    }
+
+    fun formatTime12Hour(time24: String): String {
+        val clean = time24.trim()
+        if (clean.isEmpty()) return "12:00 PM"
+        if (clean.contains("AM", ignoreCase = true) || clean.contains("PM", ignoreCase = true)) {
+            return clean.uppercase(Locale.US)
+        }
+        val parts = clean.split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: return clean
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val amPm = if (h >= 12) "PM" else "AM"
+        val h12 = when {
+            h == 0 -> 12
+            h > 12 -> h - 12
+            else -> h
+        }
+        return String.format(Locale.US, "%02d:%02d %s", h12, m.coerceIn(0, 59), amPm)
+    }
+
+    fun currentFullDateTimeBanner(): String {
+        val today = todayEpochDay()
+        return "${formatFullDateWithDay(today)} • ${currentTimeWithSecondsFormatted()} (GMT+6)"
+    }
+
     fun currentMonthKey(): String {
         val cal = calendar()
         return String.format(
@@ -339,7 +645,10 @@ object DhakaDateUtils {
     fun toEpochDay(year: Int, monthOneBased: Int, dayOfMonth: Int): Long {
         val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.US)
         cal.clear()
-        cal.set(year, monthOneBased - 1, dayOfMonth, 0, 0, 0)
+        val safeMonth = monthOneBased.coerceIn(1, 12)
+        val maxDay = daysInMonth(year, safeMonth)
+        val safeDay = dayOfMonth.coerceIn(1, maxDay)
+        cal.set(year, safeMonth - 1, safeDay, 0, 0, 0)
         return cal.timeInMillis / 86_400_000L
     }
 
@@ -352,6 +661,29 @@ object DhakaDateUtils {
             cal.get(Calendar.MONTH) + 1,
             cal.get(Calendar.DAY_OF_MONTH)
         )
+    }
+
+    fun epochDayToIsoDate(epochDay: Long): String {
+        val (y, m, d) = epochDayToYearMonthDay(epochDay)
+        return String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
+    }
+
+    fun parseFlexibleDateToEpochDay(input: String): Long? {
+        val clean = input.trim()
+        if (clean.equals("today", ignoreCase = true)) return todayEpochDay()
+        if (clean.equals("yesterday", ignoreCase = true)) return todayEpochDay() - 1L
+        val parts = clean.split("-", "/", ".")
+        if (parts.size == 3) {
+            val p0 = parts[0].toIntOrNull() ?: return null
+            val p1 = parts[1].toIntOrNull() ?: return null
+            val p2 = parts[2].toIntOrNull() ?: return null
+            return if (p0 >= 1970) {
+                toEpochDay(p0, p1.coerceIn(1, 12), p2.coerceIn(1, 31))
+            } else if (p2 >= 1970) {
+                toEpochDay(p2, p1.coerceIn(1, 12), p0.coerceIn(1, 31))
+            } else null
+        }
+        return null
     }
 
     fun epochDayToMonthKey(epochDay: Long): String {
@@ -367,6 +699,15 @@ object DhakaDateUtils {
         )
         val mName = monthNames.getOrElse((m - 1).coerceIn(0, 11)) { "Jan" }
         return String.format(Locale.US, "%02d %s %04d", d, mName, y)
+    }
+
+    fun formatFullDateWithDay(epochDay: Long): String {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.US)
+        cal.clear()
+        cal.timeInMillis = epochDay * 86_400_000L
+        val dayNames = arrayOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+        val dow = dayNames.getOrElse((cal.get(Calendar.DAY_OF_WEEK) - 1).coerceIn(0, 6)) { "Day" }
+        return "$dow, ${formatEpochDay(epochDay)}"
     }
 
     fun formatEpochDayShort(epochDay: Long): String {
@@ -520,6 +861,7 @@ object DefaultSeedData {
 
     fun defaultCategories(userId: String): List<Pair<String, Category>> = listOf(
         // Default Income Categories
+        "cat_inc_allowance" to Category("cat_inc_allowance", userId, "Monthly Allowance", "মাসিক ভাতা", "INCOME", "payments", "#10B981", false),
         "cat_inc_salary" to Category("cat_inc_salary", userId, "Salary", "বেতন", "INCOME", "work", "#10B981", false),
         "cat_inc_freelance" to Category("cat_inc_freelance", userId, "Freelancing", "ফ্রিল্যান্সিং", "INCOME", "laptop", "#06B6D4", false),
         "cat_inc_business" to Category("cat_inc_business", userId, "Business", "ব্যবসা", "INCOME", "store", "#3B82F6", false),
@@ -547,7 +889,18 @@ object DefaultSeedData {
         "cat_exp_personal" to Category("cat_exp_personal", userId, "Personal Care", "ব্যক্তিগত যত্ন", "EXPENSE", "spa", "#14B8A6", false),
         "cat_exp_family" to Category("cat_exp_family", userId, "Family", "পরিবার", "EXPENSE", "family_restroom", "#F97316", false),
         "cat_exp_tech" to Category("cat_exp_tech", userId, "Technology", "প্রযুক্তি ও গ্যাজেট", "EXPENSE", "devices", "#3B82F6", false),
-        "cat_exp_other" to Category("cat_exp_other", userId, "Other", "অন্যান্য ব্যয়", "EXPENSE", "more_horiz", "#64748B", false)
+        "cat_exp_other" to Category("cat_exp_other", userId, "Other", "অন্যান্য ব্যয়", "EXPENSE", "more_horiz", "#64748B", false),
+
+        // Life Event Expense Categories (Tour, Picnic, Wedding, Festival, Birthday, Gathering, Medical, Home)
+        "cat_event_tour" to Category("cat_event_tour", userId, "Event: Tour & Travel", "ইভেন্ট: ট্যুর ও ভ্রমণ", "EXPENSE", "flight", "#0EA5E9", false),
+        "cat_event_picnic" to Category("cat_event_picnic", userId, "Event: Picnic & Outing", "ইভেন্ট: পিকনিক ও আউটিং", "EXPENSE", "park", "#10B981", false),
+        "cat_event_wedding" to Category("cat_event_wedding", userId, "Event: Wedding & Ceremony", "ইভেন্ট: বিয়ে ও অনুষ্ঠান", "EXPENSE", "celebration", "#EC4899", false),
+        "cat_event_festival" to Category("cat_event_festival", userId, "Event: Festival / Eid / Puja", "ইভেন্ট: ঈদ / পূজা / উৎসব", "EXPENSE", "redeem", "#F59E0B", false),
+        "cat_event_birthday" to Category("cat_event_birthday", userId, "Event: Birthday & Party", "ইভেন্ট: জন্মদিন ও পার্টি", "EXPENSE", "cake", "#8B5CF6", false),
+        "cat_event_gathering" to Category("cat_event_gathering", userId, "Event: Family Dawat / Iftar", "ইভেন্ট: দাওয়াত ও ইফতার", "EXPENSE", "restaurant", "#F97316", false),
+        "cat_event_medical" to Category("cat_event_medical", userId, "Event: Medical Emergency", "ইভেন্ট: জরুরি চিকিৎসা", "EXPENSE", "medical_services", "#E11D48", false),
+        "cat_event_home" to Category("cat_event_home", userId, "Event: House Shifting / Home", "ইভেন্ট: বাসা বদল", "EXPENSE", "home", "#6366F1", false),
+        "cat_event_other" to Category("cat_event_other", userId, "Event: Other Life Event", "ইভেন্ট: অন্যান্য ইভেন্ট", "EXPENSE", "event", "#14B8A6", false)
     )
 }
 

@@ -165,14 +165,14 @@ fun TransactionsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Transactions Ledger",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Transactions",
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "${filteredTransactions.size} matching transactions",
+                        text = "${filteredTransactions.size} entries",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -185,7 +185,7 @@ fun TransactionsScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Add New")
+                    Text("Add")
                 }
             }
         }
@@ -441,15 +441,14 @@ fun CategoryTypedModuleScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isIncome) "Income Management" else "Expense Management",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = if (isIncome) "Income" else "Expenses",
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = if (isIncome) "Track salary, freelancing, business & custom income sources"
-                        else "Analyze category spending, daily expenses & custom categories",
+                        text = "${typedTransactions.size} records",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -552,12 +551,19 @@ fun CategoryTypedModuleScreen(
                         FilterChip(
                             selected = selectedCategoryFilter == "ALL",
                             onClick = { selectedCategoryFilter = "ALL" },
-                            label = { Text("All Categories") }
+                            label = { Text("All") }
                         )
                         typedCategories.forEach { cat ->
                             FilterChip(
                                 selected = selectedCategoryFilter == cat.id,
                                 onClick = { selectedCategoryFilter = cat.id },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = iconForName(cat.iconName),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 label = { Text(cat.name) },
                                 trailingIcon = if (cat.isCustom) {
                                     {
@@ -747,14 +753,14 @@ fun AccountsAndWalletsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Accounts & Digital Wallets",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Wallets & Accounts",
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Combined Net Worth: ${MoneyUtils.formatPaisa(totalBalance, symbol, showDecimals = true)}",
+                        text = "Total: ${MoneyUtils.formatPaisa(totalBalance, symbol, showDecimals = true)}",
                         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMonoFontFamily),
                         fontWeight = FontWeight.SemiBold,
                         color = RoyalBlue

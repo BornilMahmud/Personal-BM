@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,12 +26,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.TableView
 import androidx.compose.material3.Button
@@ -43,6 +52,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +72,7 @@ import com.example.data.model.FinTransaction
 import com.example.data.model.MoneyUtils
 import com.example.data.model.UserSettings
 import com.example.ui.components.TransactionRowItem
+import com.example.ui.components.UserAvatarBadge
 import com.example.ui.theme.AmberWarning
 import com.example.ui.theme.CrimsonDanger
 import com.example.ui.theme.EmeraldSuccess
@@ -70,6 +81,8 @@ import com.example.ui.theme.RoyalBlue
 import com.example.ui.theme.VibrantCyan
 import com.example.ui.viewmodel.PersonalBmUiState
 import com.example.util.ExportAndBackupManager
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 
 /**
  * Section 15: Interactive Financial Calendar with daily transaction indicators,
@@ -80,6 +93,7 @@ fun FinancialCalendarScreen(
     uiState: PersonalBmUiState,
     onMonthChange: (String) -> Unit,
     onSelectDate: (Long) -> Unit,
+    onAddTransactionOnDate: (Long) -> Unit = {},
     onEditTransaction: (FinTransaction) -> Unit,
     onDuplicateTransaction: (FinTransaction) -> Unit,
     onDeleteTransaction: (FinTransaction) -> Unit
@@ -119,9 +133,10 @@ fun FinancialCalendarScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Financial Calendar",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground
+                    text = "Calendar",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { onMonthChange(DhakaDateUtils.previousMonthKey(monthKey)) }) {
@@ -129,7 +144,7 @@ fun FinancialCalendarScreen(
                     }
                     Text(
                         text = DhakaDateUtils.formatMonthKeyDisplay(monthKey),
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = RoyalBlue
                     )
                     IconButton(onClick = { onMonthChange(DhakaDateUtils.nextMonthKey(monthKey)) }) {
@@ -260,36 +275,53 @@ fun FinancialCalendarScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column {
-                        Text(
-                            text = DhakaDateUtils.formatEpochDay(selectedDayEpoch),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "${selectedDayTxs.size} transactions recorded",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = DhakaDateUtils.formatFullDateWithDay(selectedDayEpoch),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${selectedDayTxs.size} entries",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "+${MoneyUtils.formatPaisa(selectedDayIncome, symbol)}",
+                                style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFontFamily),
+                                color = EmeraldSuccess
+                            )
+                            Text(
+                                text = "-${MoneyUtils.formatPaisa(selectedDayExpense, symbol)}",
+                                style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFontFamily),
+                                color = CrimsonDanger
+                            )
+                        }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "+${MoneyUtils.formatPaisa(selectedDayIncome, symbol)}",
-                            style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFontFamily),
-                            color = EmeraldSuccess
-                        )
-                        Text(
-                            text = "-${MoneyUtils.formatPaisa(selectedDayExpense, symbol)}",
-                            style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFontFamily),
-                            color = CrimsonDanger
-                        )
+                    Button(
+                        onClick = { onAddTransactionOnDate(selectedDayEpoch) },
+                        colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("calendar_add_tx_on_date_button")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Add Transaction on ${DhakaDateUtils.formatEpochDay(selectedDayEpoch)}")
                     }
                 }
             }
@@ -369,12 +401,12 @@ fun ReportsAndExportsScreen(
         item {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Financial Reports & Exports",
-                style = MaterialTheme.typography.headlineLarge,
+                text = "Reports & Exports",
+                style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Generate Daily, Weekly, Monthly, Yearly, Category, Account, Income & Expense statements in CSV or PDF",
+                text = "Export CSV or PDF statements",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -602,19 +634,53 @@ fun ReportsAndExportsScreen(
 @Composable
 fun SettingsScreen(
     uiState: PersonalBmUiState,
+    isCloudSignedIn: Boolean = false,
     onUpdateSettings: (UserSettings) -> Unit,
+    onUpdateUserProfile: (UserSettings, String, Boolean) -> Unit = { s, _, _ -> onUpdateSettings(s) },
+    onSyncToCloud: () -> Unit = {},
     onSignOutClick: () -> Unit
 ) {
     val context = LocalContext.current
     val current = uiState.settings
+    val googleUser = remember(isCloudSignedIn) {
+        try { Firebase.auth.currentUser } catch (_: Exception) { null }
+    }
+    val googlePhotoUrl = remember(googleUser) {
+        googleUser?.photoUrl?.toString() ?: ""
+    }
 
     var displayName by remember(current.displayName) { mutableStateOf(current.displayName) }
+    var email by remember(current.email, googleUser?.email) {
+        mutableStateOf(current.email.ifBlank { googleUser?.email ?: "" })
+    }
+    var photoUrl by remember(uiState.photoUrl, googlePhotoUrl) {
+        mutableStateOf(uiState.photoUrl.ifBlank { googlePhotoUrl })
+    }
+    var isCustomPhoto by remember { mutableStateOf(false) }
+
     var currencyCode by remember(current.currencyCode) { mutableStateOf(current.currencyCode.ifBlank { "BDT" }) }
     var currencySymbol by remember(current.currencySymbol) { mutableStateOf(current.currencySymbol.ifBlank { "৳" }) }
-    var themeMode by remember(current.themeMode) { mutableStateOf(current.themeMode) }
+    var themeMode by remember(current.themeMode) { mutableStateOf(current.themeMode.ifBlank { "light" }) }
     var language by remember(current.language) { mutableStateOf(current.language) }
     var defaultAccountId by remember(current.defaultAccountId) { mutableStateOf(current.defaultAccountId) }
     var weekStartDay by remember(current.weekStartDay) { mutableStateOf(current.weekStartDay) }
+
+    val profilePhotoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            photoUrl = uri.toString()
+            isCustomPhoto = true
+            onUpdateUserProfile(
+                current.copy(
+                    displayName = displayName.trim().ifBlank { "Personal BM User" }.take(120),
+                    email = email.trim().take(254)
+                ),
+                photoUrl,
+                true
+            )
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -625,18 +691,13 @@ fun SettingsScreen(
         item {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (language == "bn") "সেটিংস ও প্রোফাইল" else "Settings & Preferences",
-                style = MaterialTheme.typography.headlineLarge,
+                text = if (language == "bn") "সেটিংস" else "Settings",
+                style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "Personal BM • Currency: Bangladeshi Taka (৳) • Timezone: Asia/Dhaka",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        // Profile & Regional Preferences
+        // Google Auth & User Profile Card (Detects Google Photo & Name + Fully Updatable)
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -648,20 +709,124 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Profile & Currency", style = MaterialTheme.typography.titleLarge)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        UserAvatarBadge(
+                            displayName = displayName.ifBlank { "Guest" },
+                            photoUrl = photoUrl,
+                            size = 64.dp
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = displayName.ifBlank { "Guest" },
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isCloudSignedIn) email.ifBlank { "Google Account Connected" } else "Logged in as Guest (Local Device Storage)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Surface(
+                                color = if (isCloudSignedIn) EmeraldSuccess.copy(alpha = 0.14f) else RoyalBlue.copy(alpha = 0.14f),
+                                shape = RoundedCornerShape(999.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCloudSignedIn) Icons.Default.CloudDone else Icons.Default.Backup,
+                                        contentDescription = null,
+                                        tint = if (isCloudSignedIn) EmeraldSuccess else RoyalBlue,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isCloudSignedIn) "Personal Google Account • Saved to Cloud" else "Guest Mode • Local Storage Active",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isCloudSignedIn) EmeraldSuccess else RoyalBlue,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                profilePhotoPicker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.AddAPhoto, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Choose Photo")
+                        }
+                        if (googlePhotoUrl.isNotBlank() && photoUrl != googlePhotoUrl) {
+                            TextButton(
+                                onClick = {
+                                    photoUrl = googlePhotoUrl
+                                    isCustomPhoto = false
+                                    onUpdateUserProfile(
+                                        current.copy(displayName = displayName.trim().ifBlank { googleUser?.displayName ?: "User" }),
+                                        googlePhotoUrl,
+                                        false
+                                    )
+                                }
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Use Google Photo")
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = displayName,
                         onValueChange = { displayName = it },
-                        label = { Text("Display Name") },
+                        label = { Text("Display Name (Detected from Google or Custom)") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_display_name_input")
                     )
+
+                    OutlinedTextField(
+                        value = photoUrl,
+                        onValueChange = {
+                            photoUrl = it
+                            isCustomPhoto = true
+                        },
+                        label = { Text("Profile Image URL / URI (Updatable)") },
+                        placeholder = { Text("https://... or choose photo above") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_photo_url_input")
+                    )
+
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
                             value = currencyCode,
                             onValueChange = { currencyCode = it },
                             label = { Text("Currency Code") },
                             singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
                         )
                         OutlinedTextField(
@@ -669,6 +834,7 @@ fun SettingsScreen(
                             onValueChange = { currencySymbol = it },
                             label = { Text("Symbol") },
                             singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -677,23 +843,33 @@ fun SettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = language == "en",
-                            onClick = { language = "en" },
+                            onClick = {
+                                language = "en"
+                                onUpdateSettings(current.copy(language = "en", themeMode = themeMode))
+                            },
                             label = { Text("English") }
                         )
                         FilterChip(
                             selected = language == "bn",
-                            onClick = { language = "bn" },
+                            onClick = {
+                                language = "bn"
+                                onUpdateSettings(current.copy(language = "bn", themeMode = themeMode))
+                            },
                             label = { Text("বাংলা (Bengali)") }
                         )
                     }
 
-                    Text("Theme Appearance", style = MaterialTheme.typography.labelLarge)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("system" to "System", "light" to "Light Mode", "dark" to "Dark Mode").forEach { (k, label) ->
+                    Text("Theme", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("light" to "Light", "dark" to "Dark & Orange", "system" to "Auto").forEach { (k, label) ->
                             FilterChip(
                                 selected = themeMode == k,
-                                onClick = { themeMode = k },
-                                label = { Text(label) }
+                                onClick = {
+                                    themeMode = k
+                                    onUpdateSettings(current.copy(themeMode = k, language = language))
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier.testTag("settings_theme_$k")
                             )
                         }
                     }
@@ -703,7 +879,10 @@ fun SettingsScreen(
                         uiState.accounts.forEach { acc ->
                             FilterChip(
                                 selected = defaultAccountId == acc.id,
-                                onClick = { defaultAccountId = acc.id },
+                                onClick = {
+                                    defaultAccountId = acc.id
+                                    onUpdateSettings(current.copy(defaultAccountId = acc.id, themeMode = themeMode, language = language))
+                                },
                                 label = { Text(acc.name) }
                             )
                         }
@@ -714,7 +893,10 @@ fun SettingsScreen(
                         listOf("SATURDAY", "SUNDAY", "MONDAY").forEach { day ->
                             FilterChip(
                                 selected = weekStartDay == day,
-                                onClick = { weekStartDay = day },
+                                onClick = {
+                                    weekStartDay = day
+                                    onUpdateSettings(current.copy(weekStartDay = day, themeMode = themeMode, language = language))
+                                },
                                 label = { Text(day) }
                             )
                         }
@@ -722,9 +904,10 @@ fun SettingsScreen(
 
                     Button(
                         onClick = {
-                            onUpdateSettings(
+                            onUpdateUserProfile(
                                 current.copy(
-                                    displayName = displayName.trim().take(120),
+                                    displayName = displayName.trim().ifBlank { "Personal BM User" }.take(120),
+                                    email = email.trim().take(254),
                                     currencyCode = currencyCode.trim().ifBlank { "BDT" }.take(10),
                                     currencySymbol = currencySymbol.trim().ifBlank { "৳" }.take(10),
                                     timezone = "Asia/Dhaka",
@@ -732,7 +915,9 @@ fun SettingsScreen(
                                     themeMode = themeMode,
                                     defaultAccountId = defaultAccountId,
                                     weekStartDay = weekStartDay
-                                )
+                                ),
+                                photoUrl.trim(),
+                                isCustomPhoto
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
@@ -743,13 +928,13 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Save Preferences")
+                        Text("Update Profile & Save Preferences")
                     }
                 }
             }
         }
 
-        // Data Backup & Export Card
+        // Google Cloud Sync, Local Storage & Backup Card
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -761,12 +946,32 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Data Backup & Security", style = MaterialTheme.typography.titleLarge)
+                    Text("Firebase Cloud Sync & Local Backup", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        text = "Your financial records are automatically backed up in real-time to your isolated Firebase Firestore ledger. You can also download a full local JSON backup snapshot at any time.",
+                        text = if (isCloudSignedIn) {
+                            "Signed in with Google (${email.ifBlank { current.displayName }}). All transactions, monthly allowances, expenses, savings goals, and profile updates are automatically saved into Firebase Firestore and mirrored locally."
+                        } else {
+                            "Currently running in Default Local Storage mode. Sign in with Google below at any time to detect your Google profile photo & name and save all your data to Firebase Cloud."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    if (isCloudSignedIn) {
+                        Button(
+                            onClick = onSyncToCloud,
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("sync_firebase_cloud_button")
+                        ) {
+                            Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sync All Records to Firebase Now")
+                        }
+                    }
+
                     OutlinedButton(
                         onClick = {
                             ExportAndBackupManager.exportFullBackupJson(
@@ -792,15 +997,24 @@ fun SettingsScreen(
 
                     Button(
                         onClick = onSignOutClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = CrimsonDanger),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isCloudSignedIn) CrimsonDanger else RoyalBlue
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("sign_out_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = if (isCloudSignedIn) Icons.AutoMirrored.Filled.Logout else Icons.AutoMirrored.Filled.Login,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Sign Out of Personal BM")
+                        Text(
+                            if (isCloudSignedIn) "Sign Out of Google Account (Switch to Local)"
+                            else "Sign in with Google & Save to Firebase"
+                        )
                     }
                 }
             }
